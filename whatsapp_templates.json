@@ -1,0 +1,138 @@
+[
+  {
+    "id": "f4af1d70-42b4-4b01-964e-9fab80309581",
+    "name": "Property Inquiry Response",
+    "category": "business",
+    "text": "Hi {{name}}, thanks for asking about {{property}}. Yes, it's available! Would you like to schedule a viewing? I'm available {{availability}}.",
+    "variables": [
+      "name",
+      "property",
+      "availability"
+    ],
+    "shortcuts": [
+      "prop",
+      "property"
+    ],
+    "tags": [
+      "real-estate",
+      "inquiry",
+      "first-contact"
+    ],
+    "usageCount": 0,
+    "lastUsed": null,
+    "createdAt": 1766242163676,
+    "updatedAt": 1766242163676
+  },
+  {
+    "id": "387a182a-bd64-4645-88ec-6ff1a9c6b634",
+    "name": "Pricing Information",
+    "category": "business",
+    "text": "The price for {{item}} is {{price}}. This includes {{inclusions}}. Would you like to proceed?",
+    "variables": [
+      "item",
+      "price",
+      "inclusions"
+    ],
+    "shortcuts": [
+      "price",
+      "pricing"
+    ],
+    "tags": [
+      "pricing",
+      "business"
+    ],
+    "usageCount": 0,
+    "lastUsed": null,
+    "createdAt": 1766242163676,
+    "updatedAt": 1766242163676
+  },
+  {
+    "id": "5bc76be4-2615-4ae1-b8b9-2965d780f390",
+    "name": "Meeting Confirmation",
+    "category": "business",
+    "text": "Perfect! I've scheduled our meeting for {{date}} at {{time}}. Looking forward to it! {{location}}",
+    "variables": [
+      "date",
+      "time",
+      "location"
+    ],
+    "shortcuts": [
+      "meeting",
+      "confirm"
+    ],
+    "tags": [
+      "meeting",
+      "confirmation"
+    ],
+    "usageCount": 0,
+    "lastUsed": null,
+    "createdAt": 1766242163676,
+    "updatedAt": 1766242163676
+  },
+  {
+    "id": "c26a5211-d187-4b65-aef2-160120e11fb3",
+    "name": "Follow-up Reminder",
+    "category": "follow-up",
+    "text": "Hi {{name}}, just following up on {{topic}}. Have you had a chance to think about it?",
+    "variables": [
+      "name",
+      "topic"
+    ],
+    "shortcuts": [
+      "followup",
+      "reminder"
+    ],
+    "tags": [
+      "follow-up",
+      "reminder"
+    ],
+    "usageCount": 0,
+    "lastUsed": null,
+    "createdAt": 1766242163676,
+    "updatedAt": 1766242163676
+  },
+  {
+    "id": "e7020430-9df1-4916-a643-a7f6c831af9c",
+    "name": "Thank You",
+    "category": "closing",
+    "text": "Thank you so much, {{name}}! I really appreciate {{reason}}. Have a great day! 😊",
+    "variables": [
+      "name",
+      "reason"
+    ],
+    "shortcuts": [
+      "thanks",
+      "thankyou"
+    ],
+    "tags": [
+      "gratitude",
+      "closing"
+    ],
+    "usageCount": 0,
+    "lastUsed": null,
+    "createdAt": 1766242163676,
+    "updatedAt": 1766242163676
+  },
+  {
+    "id": "6bbe5711-990a-45a8-bcab-68b7f50d90f6",
+    "name": "Out of Office",
+    "category": "personal",
+    "text": "Thanks for your message! I'm currently away and will respond by {{return_date}}. For urgent matters, please contact {{backup_contact}}.",
+    "variables": [
+      "return_date",
+      "backup_contact"
+    ],
+    "shortcuts": [
+      "ooo",
+      "away"
+    ],
+    "tags": [
+      "auto-reply",
+      "vacation"
+    ],
+    "usageCount": 0,
+    "lastUsed": null,
+    "createdAt": 1766242163676,
+    "updatedAt": 1766242163676
+  }
+]
