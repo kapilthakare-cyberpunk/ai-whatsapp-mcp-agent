@@ -199,3 +199,50 @@ src/**/*.js.map
 # Test files (but keep test structure)
 test/**/*.output/
 test/**/coverage/
+
+# =============================================
+# Temporary and System Files
+# =============================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Build artifacts
+*.tgz
+*.tar.gz
+dist/
+build/
+
+# New/unknown files that should be ignored
+.env.example.new
+*.backup
+*.bak
+*.old
+
+# Keep only essential documentation
+!README.md
+!QUICK_START_*.md
+!SETUP_*.md
+!INSTALLATION_*.md
