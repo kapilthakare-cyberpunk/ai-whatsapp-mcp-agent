@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "whatsapp-advanced": {
+      "command": "/home/linuxbrew/.linuxbrew/bin/node",
+      "args": ["/home/kapilt/Projects/ai-whatsapp-mcp-agent/mcp-server/mcp-5ire.js"],
+      "env": {
+        "WHATSAPP_API_URL": "http://localhost:3000"
+      }
+    }
+  }
+}

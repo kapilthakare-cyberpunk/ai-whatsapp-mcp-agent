@@ -1,31 +1,22 @@
 {
   "name": "whatsapp-mcp-server",
-  "version": "2.0.0",
-  "description": "Enhanced WhatsApp MCP server with multi-LLM support and intelligent fallback",
+  "version": "1.0.0",
+  "description": "WhatsApp MCP server for integrating with Qwen Code",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "jest",
-    "test:llms": "node scripts/test-llms.js",
-    "setup:ollama": "bash scripts/setup-ollama.sh",
-    "health": "curl http://localhost:3000/health && curl http://localhost:3000/health/llm"
+    "test": "jest"
   },
   "keywords": [
     "whatsapp",
     "mcp",
     "api",
-    "integration",
-    "ai",
-    "llm",
-    "ollama",
-    "gemini",
-    "groq"
+    "integration"
   ],
-  "author": "Kapil Thakare - Primes and Zooms",
+  "author": "Qwen Code Project",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.1",
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "axios": "^1.13.2",
     "body-parser": "^1.20.4",
@@ -33,9 +24,7 @@
     "crypto": "^1.0.1",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
-    "node-cache": "^5.1.2",
     "qrcode-terminal": "^0.12.0",
-    "sqlite3": "^5.1.7",
     "uuid": "^13.0.0"
   },
   "devDependencies": {

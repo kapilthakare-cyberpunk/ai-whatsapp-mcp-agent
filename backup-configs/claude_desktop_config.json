@@ -1,0 +1,14 @@
+{
+  "id": "407977d6-4a02-4687-a6af-0da52cf37b78",
+  "label": "WhatsApp",
+  "description": "Local WhatsApp MCP Server",
+  "type": "local",
+  "command": "node",
+  "arguments": ["/home/kapilt/Projects/ai-whatsapp-mcp-agent/mcp-server/index.js"],
+  "env": {
+    "WHATSAPP_API_URL": "http://localhost:3000"
+  },
+  "approval_policy": "always",
+  "is_active": true
+}
+

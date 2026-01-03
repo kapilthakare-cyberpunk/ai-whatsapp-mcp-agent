@@ -1,0 +1,25 @@
+{
+  "name": "whatsapp-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP Server for WhatsApp Communication Management",
+  "main": "index.js",
+  "type": "commonjs",
+  "bin": {
+    "whatsapp-mcp": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "mcp",
+    "whatsapp",
+    "communication"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "axios": "^1.13.2",
+    "express": "^5.2.1"
+  }
+}

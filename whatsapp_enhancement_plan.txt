@@ -1,0 +1,595 @@
+# AI WhatsApp Agent Enhancement Plan
+## Multi-LLM Support with Intelligent Fallback & Hardening
+
+### 🎯 **Overview**
+Transform your WhatsApp MCP agent into a robust, production-ready system with:
+- **Multi-LLM Support**: Ollama, Gemini, Groq with intelligent routing
+- **Advanced Hardening**: Rate limiting, error recovery, circuit breakers
+- **Offline Capabilities**: Full functionality without Claude/external APIs
+- **Smart Context Management**: Business context awareness for sales/marketing
+- **Production Monitoring**: Logging, health checks, performance metrics
+
+---
+
+## 🏗️ **Architecture Enhancements**
+
+### 1. **Intelligent LLM Router** (New Component)
+```
+┌─────────────────────────────────────────────┐
+│           LLM Router (Priority)             │
+├─────────────────────────────────────────────┤
+│ 1. Check Cache (Redis/Memory)               │
+│ 2. Try Primary (Groq) - Fast & Reliable     │
+│ 3. Fallback (Gemini) - High Quality         │
+│ 4. Local (Ollama) - Always Available        │
+│ 5. Template/Rule-based - Last Resort        │
+└─────────────────────────────────────────────┘
+```
+
+### 2. **Business Context Layer** (For Sales/Marketing)
+Inject your business knowledge into every response:
+- Photo/Cine gear rental expertise
+- Pune market understanding
+- Social media tone matching
+- Event collaboration templates
+
+---
+
+## 📋 **Implementation Steps**
+
+### **Phase 1: Enhanced LLM Manager** (Core Intelligence)
+
+#### File: `utils/enhanced-llm-manager.js`
+
+**Features:**
+- Intelligent routing based on query complexity
+- Response caching for common queries
+- Circuit breaker pattern for failing APIs
+- Business context injection
+- Fallback chain: Groq → Gemini → Ollama → Templates
+
+**Key Methods:**
+```javascript
+- generateResponse(message, context, options)
+  ├─ analyzeComplexity() // Route to best model
+  ├─ checkCache() // Avoid redundant calls
+  ├─ tryPrimaryProvider() // Groq first
+  ├─ tryFallbackProviders() // Gemini → Ollama
+  └─ useTemplateResponse() // Last resort
+
+- getBusinessContext(message) // Detect sales/marketing context
+- classifyIntent() // Query, complaint, inquiry, etc.
+```
+
+---
+
+### **Phase 2: Rate Limiting & Circuit Breaker**
+
+#### File: `utils/rate-limiter.js`
+
+**Features:**
+- Per-user rate limiting (prevent spam)
+- API quota management (avoid exceeding limits)
+- Circuit breaker for failing services
+- Exponential backoff on retries
+
+**Implementation:**
+```javascript
+class CircuitBreaker {
+  states: CLOSED (working) → OPEN (broken) → HALF_OPEN (testing)
+  
+  Features:
+  - Auto-recovery after cooldown
+  - Configurable failure thresholds
+  - Fallback activation on OPEN state
+}
+```
+
+---
+
+### **Phase 3: Context Management System**
+
+#### File: `utils/context-manager.js`
+
+**Business Context Templates:**
+```javascript
+const BUSINESS_CONTEXTS = {
+  photoCineGear: {
+    expertise: "Photo and cine equipment rentals in Pune",
+    tone: "professional yet friendly",
+    commonQueries: ["availability", "pricing", "delivery"],
+    upsells: ["equipment packages", "operator services"]
+  },
+  socialMedia: {
+    tone: "engaging, creative, emoji-friendly",
+    hashtagStrategy: true,
+    callToAction: true
+  },
+  events: {
+    tone: "enthusiastic, detail-oriented",
+    followUp: true,
+    collaborationFocus: true
+  }
+}
+```
+
+**Smart Context Injection:**
+- Detect query type (rental inquiry, social media post, event collab)
+- Inject relevant business knowledge
+- Maintain conversation memory
+- Track customer journey stage
+
+---
+
+### **Phase 4: Ollama Integration (Local AI)**
+
+#### File: `utils/ollama-manager.js`
+
+**Recommended Models:**
+1. **llama3.2** (3B) - Fast, good for chat
+2. **mistral** (7B) - Better reasoning
+3. **phi3** (3.8B) - Microsoft's efficient model
+4. **qwen2.5** (7B) - Excellent multilingual
+
+**Setup Script:** `scripts/setup-ollama.sh`
+```bash
+#!/bin/bash
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull recommended models
+ollama pull llama3.2
+ollama pull mistral
+ollama pull phi3
+
+# Test
+ollama run llama3.2 "Hello, test message"
+```
+
+**Features:**
+- Auto-detect available models
+- Model selection based on query complexity
+- Streaming responses for real-time updates
+- Full offline capability
+
+---
+
+### **Phase 5: Caching Layer**
+
+#### File: `utils/response-cache.js`
+
+**Caching Strategy:**
+```javascript
+Cache Levels:
+1. In-Memory (Fast) - Recent 100 queries
+2. Redis (Optional) - Distributed caching
+3. File-based - Persistent cache
+
+Cache Keys:
+- FAQ responses (high reuse)
+- Business info (pricing, hours, services)
+- Common greetings/acknowledgments
+- Template-based responses
+
+TTL (Time To Live):
+- FAQ: 24 hours
+- Dynamic content: 1 hour
+- User-specific: 15 minutes
+```
+
+---
+
+### **Phase 6: Monitoring & Health Checks**
+
+#### File: `utils/health-monitor.js`
+
+**Metrics Tracked:**
+```javascript
+{
+  llmHealth: {
+    groq: { status: 'healthy', responseTime: 250, successRate: 98.5 },
+    gemini: { status: 'healthy', responseTime: 400, successRate: 97.2 },
+    ollama: { status: 'healthy', responseTime: 800, successRate: 99.8 }
+  },
+  
+  performance: {
+    avgResponseTime: 320,
+    cacheHitRate: 35.5,
+    totalRequests: 1547,
+    errorRate: 1.2
+  },
+  
+  business: {
+    todayMessages: 145,
+    responsesSent: 132,
+    conversionRate: 12.5 // inquiries to bookings
+  }
+}
+```
+
+**Health Endpoints:**
+- `GET /health/llm` - LLM provider status
+- `GET /health/system` - Overall system health
+- `GET /metrics` - Prometheus-compatible metrics
+
+---
+
+### **Phase 7: Business Intelligence Layer**
+
+#### File: `utils/business-intelligence.js`
+
+**For Sales/Marketing Head:**
+
+**Features:**
+1. **Lead Scoring**
+   - Detect high-intent messages (pricing, availability)
+   - Flag urgent inquiries
+   - Track follow-up reminders
+
+2. **Content Suggestions**
+   - Social media post ideas based on trends
+   - Event collaboration opportunities
+   - Engagement optimization
+
+3. **Analytics Dashboard**
+   - Most asked questions
+   - Peak inquiry times
+   - Conversion funnel tracking
+   - Response effectiveness
+
+---
+
+## 🚀 **Quick Start Implementation**
+
+### **Step 1: Install Dependencies**
+```bash
+cd /home/kapilt/Projects/ai-whatsapp-mcp-agent
+
+npm install --save \
+  bottleneck \          # Rate limiting
+  node-cache \          # In-memory caching
+  ioredis \            # Redis (optional)
+  prom-client \        # Metrics
+  winston \            # Logging
+  axios-retry          # Robust HTTP
+```
+
+### **Step 2: Setup Local Ollama**
+```bash
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull models (choose based on your hardware)
+ollama pull llama3.2      # 2GB - Fast, good enough
+ollama pull mistral       # 4.1GB - Better quality
+ollama pull phi3          # 2.3GB - Efficient alternative
+
+# Start Ollama service
+ollama serve
+```
+
+### **Step 3: Update Environment Variables**
+```bash
+# Add to .env
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_PRIMARY_MODEL=mistral
+OLLAMA_FALLBACK_MODEL=llama3.2
+
+# Cache settings
+ENABLE_CACHE=true
+CACHE_TYPE=memory  # or 'redis'
+CACHE_TTL=3600
+
+# Business context
+BUSINESS_NAME="Primes and Zooms Photo and Cine Gear Rentals"
+BUSINESS_LOCATION="Pune"
+BUSINESS_FOCUS="photo,cine,gear,rentals,events"
+
+# Rate limiting
+RATE_LIMIT_PER_USER=30
+RATE_LIMIT_WINDOW=60000  # 1 minute
+```
+
+---
+
+## 📦 **File Structure (New Files)**
+
+```
+/home/kapilt/Projects/ai-whatsapp-mcp-agent/
+├── utils/
+│   ├── enhanced-llm-manager.js      # NEW: Smart LLM routing
+│   ├── ollama-manager.js            # NEW: Local AI handler
+│   ├── response-cache.js            # NEW: Caching layer
+│   ├── rate-limiter.js              # NEW: Rate limiting
+│   ├── circuit-breaker.js           # NEW: Fault tolerance
+│   ├── context-manager.js           # NEW: Business context
+│   ├── health-monitor.js            # NEW: System monitoring
+│   └── business-intelligence.js     # NEW: BI features
+├── config/
+│   ├── llm-config.js                # NEW: LLM settings
+│   └── business-config.js           # NEW: Business rules
+├── scripts/
+│   ├── setup-ollama.sh              # NEW: Ollama setup
+│   └── test-llms.js                 # NEW: Test all providers
+├── monitoring/
+│   ├── dashboard.html               # NEW: Health dashboard
+│   └── metrics.js                   # NEW: Metrics collector
+└── docs/
+    ├── HARDENING.md                 # NEW: Security guide
+    └── BUSINESS_FEATURES.md         # NEW: BI documentation
+```
+
+---
+
+## 🎯 **Usage Examples**
+
+### **1. Smart Response with Fallback**
+```javascript
+const llmManager = require('./utils/enhanced-llm-manager');
+
+// Automatically routes to best available LLM
+const response = await llmManager.generateResponse(
+  "What's the rental price for Sony A7S3?",
+  { 
+    userId: '919876543210@s.whatsapp.net',
+    conversationHistory: [...],
+    businessContext: 'photo_rental_inquiry'
+  }
+);
+
+// Response includes:
+// - text: Generated message
+// - model: Which LLM was used
+// - confidence: Response quality score
+// - fromCache: Whether cached
+// - responseTime: Latency
+```
+
+### **2. Business Context Injection**
+```javascript
+const contextManager = require('./utils/context-manager');
+
+// Detect business context
+const context = await contextManager.getBusinessContext(
+  "Need a camera for wedding shoot this Saturday"
+);
+
+// Returns:
+// {
+//   type: 'rental_inquiry',
+//   urgency: 'high',
+//   category: 'wedding_photography',
+//   suggestedResponse: 'professional_with_upsell',
+//   followUpRequired: true
+// }
+```
+
+### **3. Rate Limiting Example**
+```javascript
+const rateLimiter = require('./utils/rate-limiter');
+
+// Check if user can send
+const allowed = await rateLimiter.checkLimit(userId);
+if (!allowed) {
+  return "Please wait a moment before sending more messages";
+}
+
+// Process message...
+await rateLimiter.recordUsage(userId);
+```
+
+---
+
+## 🔒 **Security Hardening Checklist**
+
+### **API Security**
+- ✅ Rate limiting per user/IP
+- ✅ Input sanitization (prevent injection)
+- ✅ API key rotation support
+- ✅ Request signing (HMAC)
+- ✅ CORS configuration
+- ✅ HTTPS enforcement (production)
+
+### **Data Protection**
+- ✅ Encrypt sensitive data at rest
+- ✅ Sanitize logs (no API keys/tokens)
+- ✅ PII handling (GDPR compliance)
+- ✅ Secure session management
+
+### **Error Handling**
+- ✅ Graceful degradation
+- ✅ No sensitive info in errors
+- ✅ Comprehensive logging
+- ✅ Automatic recovery
+
+---
+
+## 📊 **Performance Optimizations**
+
+### **Response Time Targets**
+- Cached responses: < 50ms
+- Groq API: < 500ms
+- Gemini API: < 800ms
+- Ollama (local): < 1500ms
+- Template fallback: < 10ms
+
+### **Caching Strategy**
+```javascript
+Priority Caching:
+1. FAQ responses (high hit rate)
+2. Business information
+3. Greeting variations
+4. Common acknowledgments
+
+Cache Invalidation:
+- Time-based (TTL)
+- Manual purge for critical updates
+- LRU eviction for memory management
+```
+
+---
+
+## 🎨 **Business-Specific Features**
+
+### **For Your Use Case (Photo/Cine Rentals)**
+
+#### **1. Automated Inquiry Handling**
+```javascript
+// Detect rental inquiries
+if (messageContains(['rent', 'hire', 'book', 'available'])) {
+  const gear = extractGearName(message);
+  const dates = extractDates(message);
+  
+  // Check availability (integrate with your system)
+  const available = await checkAvailability(gear, dates);
+  
+  // Smart response with pricing
+  return generateRentalQuote(gear, dates, available);
+}
+```
+
+#### **2. Social Media Assistant**
+```javascript
+// Generate Instagram caption
+const caption = await llmManager.generateResponse(
+  "Create engaging Instagram caption for Sony FX3 rental",
+  {
+    tone: 'social_media',
+    platform: 'instagram',
+    includeHashtags: true,
+    callToAction: 'DM to book'
+  }
+);
+```
+
+#### **3. Event Collaboration Tracker**
+```javascript
+// Track collaboration opportunities
+if (messageContains(['collab', 'partnership', 'event'])) {
+  await businessIntelligence.logOpportunity({
+    type: 'collaboration',
+    source: senderName,
+    details: message,
+    priority: detectPriority(message)
+  });
+}
+```
+
+---
+
+## 🧪 **Testing Strategy**
+
+### **Test File:** `tests/llm-resilience.test.js`
+
+**Test Scenarios:**
+1. All LLMs available (normal operation)
+2. Groq down (fallback to Gemini)
+3. Groq + Gemini down (use Ollama)
+4. All AI down (template responses)
+5. High load (rate limiting)
+6. Network timeout (retry logic)
+7. Invalid API keys (graceful error)
+
+**Run Tests:**
+```bash
+npm test -- llm-resilience
+```
+
+---
+
+## 📈 **Monitoring Dashboard**
+
+### **Access:** `http://localhost:3000/dashboard`
+
+**Features:**
+- Real-time LLM health status
+- Response time graphs
+- Error rate tracking
+- Cache hit rate
+- Business metrics (inquiries, conversions)
+- Cost tracking (API usage)
+
+---
+
+## 🚀 **Deployment Checklist**
+
+### **Production Readiness**
+- [ ] All LLMs tested and working
+- [ ] Rate limiting configured
+- [ ] Caching enabled
+- [ ] Error monitoring setup
+- [ ] Logs configured (Winston)
+- [ ] Health checks passing
+- [ ] Environment variables secured
+- [ ] Backup Ollama model installed
+- [ ] Circuit breakers tested
+- [ ] Documentation updated
+
+### **Go-Live Steps**
+1. Deploy to production server
+2. Start Ollama service
+3. Verify all LLM connections
+4. Enable monitoring
+5. Test end-to-end flows
+6. Monitor for 24 hours
+7. Optimize based on metrics
+
+---
+
+## 💡 **Pro Tips**
+
+### **For Your Business:**
+1. **Morning Briefing**: Auto-generate daily summary at 9 AM
+2. **Lead Prioritization**: Flag high-value inquiries
+3. **Follow-up Reminders**: Never miss a follow-up
+4. **Content Calendar**: AI-generated social media posts
+5. **Event Tracking**: Monitor collaboration opportunities
+
+### **Cost Optimization:**
+- Use Ollama for simple queries (free, local)
+- Cache aggressive on FAQ responses
+- Groq for complex reasoning (cheap, fast)
+- Gemini for creative content (high quality)
+
+### **Performance Tips:**
+- Pre-warm Ollama models on startup
+- Use streaming for long responses
+- Implement request coalescing for bursts
+- Monitor cache hit rate (target: >30%)
+
+---
+
+## 📞 **Support & Next Steps**
+
+### **Immediate Actions:**
+1. Review this plan
+2. Install Ollama and test
+3. Update environment variables
+4. Run health checks
+5. Test fallback scenarios
+
+### **Questions to Consider:**
+- Do you have Redis available? (for distributed cache)
+- What's your server specs? (for Ollama model selection)
+- Any specific business workflows to automate?
+- Integration with existing rental management system?
+
+---
+
+## 🎓 **Learning Resources**
+
+### **Ollama:**
+- Docs: https://ollama.com/docs
+- Models: https://ollama.com/library
+- Discord: https://discord.gg/ollama
+
+### **Rate Limiting:**
+- Bottleneck.js: https://github.com/SGrondin/bottleneck
+
+### **Monitoring:**
+- Winston: https://github.com/winstonjs/winston
+- Prometheus: https://prometheus.io/docs/introduction
+
+---
+
+**Ready to implement?** Let me know which phase you'd like to start with, and I'll provide the complete code for those specific files!
