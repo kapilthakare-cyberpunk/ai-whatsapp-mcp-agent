@@ -238,10 +238,10 @@ app.get('/summary/:userId', async (req, res) => {
 });
 
 // Endpoint to get full conversation history
-app.get('/history/:userId', async (req, res) => {
+app.get('/history/:threadId', async (req, res) => {
   try {
-    const { userId } = req.params;
-    const limit = parseInt(req.query.limit) || 20;
+    const { threadId } = req.params;
+    const limit = parseInt(req.query.limit) || 50;
 
     if (!baileysClient.isConnected()) {
       return res.status(500).json({
@@ -250,10 +250,10 @@ app.get('/history/:userId', async (req, res) => {
       });
     }
 
-    const history = await baileysClient.getConversationHistory(userId, limit);
+    const history = await baileysClient.getConversationHistoryByThread(threadId, limit);
     res.status(200).json({
       status: 'success',
-      userId,
+      threadId,
       history,
       count: history.length,
       message: 'Conversation history retrieved successfully'
@@ -894,7 +894,7 @@ app.post('/tasks/todoist/:taskId/complete', async (req, res) => {
 app.get('/tasks/detected', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
-    const tasks = await baileysClient.memoryStore.getDetectedTasks(limit);
+    const tasks = await baileysClient.db.getDetectedTasks(limit);
     res.status(200).json({
       status: 'success',
       tasks,
@@ -911,7 +911,8 @@ app.get('/tasks/detected/sender/:senderId', async (req, res) => {
   try {
     const { senderId } = req.params;
     const limit = parseInt(req.query.limit) || 20;
-    const tasks = await baileysClient.memoryStore.getDetectedTasksBySender(senderId, limit);
+    const allTasks = await baileysClient.db.getDetectedTasks(1000);
+    const tasks = allTasks.filter(t => t.senderId === senderId).slice(0, limit);
     res.status(200).json({
       status: 'success',
       tasks,
@@ -943,6 +944,121 @@ async function initializeBaileys() {
   }
 }
 
+// ============================================
+// ADVANCED WHATSAPP TOOLS ENDPOINTS
+// ============================================
+
+// Search messages by keyword
+app.get('/search', async (req, res) => {
+  try {
+    const { keyword, limit = 10 } = req.query;
+    if (!keyword) {
+      return res.status(400).json({ status: 'error', message: 'Keyword required' });
+    }
+    
+    const messages = await baileysClient.searchMessages(keyword, parseInt(limit));
+    res.status(200).json({
+      status: 'success',
+      keyword,
+      count: messages.length,
+      messages
+    });
+  } catch (error) {
+    console.error('Error searching messages:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// Get message history with specific contact
+app.get('/history/:contact', async (req, res) => {
+  try {
+    const { contact } = req.params;
+    const { limit = 20 } = req.query;
+    
+    const history = await baileysClient.getMessageHistory(contact, parseInt(limit));
+    res.status(200).json({
+      status: 'success',
+      contact,
+      count: history.length,
+      messages: history
+    });
+  } catch (error) {
+    console.error('Error getting message history:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// Get contact list
+app.get('/contacts', async (req, res) => {
+  try {
+    const { filter } = req.query;
+    const contacts = await baileysClient.getContactList(filter);
+    res.status(200).json({
+      status: 'success',
+      count: contacts.length,
+      contacts
+    });
+  } catch (error) {
+    console.error('Error getting contacts:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// Mark messages as read from a contact
+app.post('/mark-read', async (req, res) => {
+  try {
+    const { contact, all = true } = req.body;
+    if (!contact) {
+      return res.status(400).json({ status: 'error', message: 'Contact name required' });
+    }
+    
+    await baileysClient.markAsRead(contact, all);
+    res.status(200).json({
+      status: 'success',
+      message: `Marked messages from ${contact} as read`
+    });
+  } catch (error) {
+    console.error('Error marking messages as read:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// Get chat preview
+app.get('/chats', async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+    const chats = await baileysClient.getChatPreview(parseInt(limit));
+    res.status(200).json({
+      status: 'success',
+      count: chats.length,
+      chats
+    });
+  } catch (error) {
+    console.error('Error getting chats:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// Create a group
+app.post('/create-group', async (req, res) => {
+  try {
+    const { groupName, members } = req.body;
+    if (!groupName || !members || members.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'Group name and members required' });
+    }
+    
+    const result = await baileysClient.createGroup(groupName, members);
+    res.status(200).json({
+      status: 'success',
+      message: 'Group created successfully',
+      groupId: result
+    });
+  } catch (error) {
+    console.error('Error creating group:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -961,6 +1077,7 @@ initializeBaileys().then(() => {
     console.log(`Status endpoint: GET http://localhost:${PORT}/status`);
     console.log(`Send message endpoint: POST http://localhost:${PORT}/send`);
     console.log(`Health check endpoint: GET http://localhost:${PORT}/health`);
+    console.log(`Advanced endpoints available at /search, /history, /contacts, /chats, /create-group`);
   });
 });
 

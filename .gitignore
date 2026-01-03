@@ -1,0 +1,201 @@
+# WhatsApp MCP Agent - Git Ignore File
+# Excludes sensitive and generated files from version control
+
+# =============================================
+# Environment & Configuration
+# =============================================
+.env
+.env.local
+.env.*.local
+*.env
+
+# =============================================
+# WhatsApp Authentication & Session Data
+# =============================================
+baileys_store_multi/
+*.session
+*.creds
+qr-code.png
+
+# =============================================
+# Node.js & Dependencies
+# =============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# =============================================
+# Runtime & Process Data
+# =============================================
+*.pid
+*.seed
+*.pid.lock
+.nyc_output
+*.log
+logs/
+*.log.*
+
+# =============================================
+# SQLite Databases (User Data)
+# =============================================
+*.db
+*.sqlite
+*.sqlite3
+whatsapp_data.db
+
+# =============================================
+# Memory & Monitoring JSON Files
+# =============================================
+whatsapp_memories.json
+whatsapp_monitoring.json
+*.memory.json
+
+# =============================================
+# Build & Distribution
+# =============================================
+dist/
+build/
+coverage/
+.next/
+out/
+*.tgz
+*.tar.gz
+
+# =============================================
+# IDE & Editor Files
+# =============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# =============================================
+# Temporary Files
+# =============================================
+tmp/
+temp/
+*.tmp
+*.temp
+.tmp/
+
+# =============================================
+# Backup Files
+# =============================================
+*.bak
+*.backup
+*.old
+*.orig
+backup/
+
+# =============================================
+# API Keys & Secrets (in code)
+# =============================================
+# This section helps prevent accidental commits
+# of sensitive configuration
+*API_KEY*
+*SECRET*
+*PASSWORD*
+*TOKEN*
+
+# =============================================
+# Documentation Generation
+# =============================================
+docs/_build/
+docs/.doctrees/
+
+# =============================================
+# Testing
+# =============================================
+test-results/
+.nyc_output/
+coverage/
+*.lcov
+
+# =============================================
+# Package Managers
+# =============================================
+.pnp
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# =============================================
+# Local Development
+# =============================================
+.local/
+.local/bin/
+.local/share/
+
+# =============================================
+# Windows
+# =============================================
+*.exe
+*.msi
+*.cab
+*.deb
+*.rpm
+
+# =============================================
+# macOS
+# =============================================
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# =============================================
+# Linux
+# =============================================
+*~
+
+# =============================================
+# Keep important documentation
+# =============================================
+!README.md
+!*.md
+!docs/
+!examples/
+
+# =============================================
+# Keep configuration templates
+# =============================================
+!.env.example
+!config/
+!scripts/
+
+# =============================================
+# Application Specific
+# =============================================
+# Frontend build files (if using Vite/React)
+frontend/dist/
+frontend/build/
+frontend/node_modules/
+
+# Backend specific
+src/**/*.js.map
+*.tsbuildinfo
+
+# Test files (but keep test structure)
+test/**/*.output/
+test/**/coverage/

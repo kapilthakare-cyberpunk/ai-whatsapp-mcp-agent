@@ -10,7 +10,7 @@ const config = require('../config/config');
 
 
 
-const MemoryStore = require('./memory-store');
+const MemoryStore = require('./sqlite-database');
 
 class BaileysWhatsAppClient {
   constructor() {
@@ -19,7 +19,7 @@ class BaileysWhatsAppClient {
     this.qrCallback = null;
     this.currentQR = null;
     this.authState = null;
-    this.memoryStore = new MemoryStore();
+    this.db = new SQLiteDatabase();
     this.taskManager = null; // Will be injected from server
   }
 
@@ -30,6 +30,9 @@ class BaileysWhatsAppClient {
 
   async initialize() {
     try {
+      // Initialize the SQLite database
+      await this.db.initialize();
+      
       // Initialize auth state separately
       const { state, saveCreds } = await useMultiFileAuthState('./baileys_store_multi');
       this.authState = { state, saveCreds };
@@ -212,7 +215,7 @@ class BaileysWhatsAppClient {
       if (content) {
         // Store the message in memory for context
         if (content.type === 'text') {
-          await this.memoryStore.addMemory(
+          await this.db.addMemory(
             from,  // userId
             'whatsapp_conversation',  // conversationId
             content.text,  // message
@@ -241,12 +244,12 @@ class BaileysWhatsAppClient {
                     console.log(`✅ Auto-detected ${result.tasks.length} task(s) from ${senderName}`);
                     // Store detected tasks in the monitoring data
                     result.tasks.forEach(task => {
-                      this.memoryStore.addDetectedTask({
+                      this.db.addDetectedTask({
                         messageId,
                         senderId: from,
                         senderName,
                         task,
-                        timestamp: Date.now()
+                        detectedAt: Date.now()
                       });
                     });
                   }
@@ -277,7 +280,7 @@ class BaileysWhatsAppClient {
           rawMessage: message
         };
 
-        await this.memoryStore.addMonitoredMessage(monitoringData);
+        await this.db.addMonitoredMessage(monitoringData);
 
         // Emit MCP event for the message
         await this.emitMCPEvent({
@@ -313,8 +316,8 @@ class BaileysWhatsAppClient {
 
   async getConversationContext(userId, limit = 5) {
     try {
-      const context = await this.memoryStore.getConversationContext(userId, 'whatsapp_conversation', limit);
-      return context;
+      const memories = await this.db.getMemories(userId, 'whatsapp_conversation', limit);
+      return memories.map(m => m.message).join('\n');
     } catch (error) {
       console.error('Error getting conversation context:', error);
       return '';
@@ -323,7 +326,33 @@ class BaileysWhatsAppClient {
 
   async getConversationSummary(userId) {
     try {
-      return await this.memoryStore.getConversationSummary(userId);
+      const memories = await this.db.getMemories(userId, 'whatsapp_conversation', 1000);
+      if (memories.length === 0) {
+        return {
+          totalMessages: 0,
+          firstMessage: null,
+          lastMessage: null,
+          activeDays: 0
+        };
+      }
+
+      const sortedMemories = memories.sort((a, b) => a.timestamp - b.timestamp);
+      const firstMessage = sortedMemories[0];
+      const lastMessage = sortedMemories[sortedMemories.length - 1];
+
+      // Calculate unique days of activity
+      const uniqueDays = new Set();
+      sortedMemories.forEach(memory => {
+        const date = new Date(memory.timestamp).toDateString();
+        uniqueDays.add(date);
+      });
+
+      return {
+        totalMessages: memories.length,
+        firstMessage: firstMessage.message,
+        lastMessage: lastMessage.message,
+        activeDays: uniqueDays.size
+      };
     } catch (error) {
       console.error('Error getting conversation summary:', error);
       return null;
@@ -332,7 +361,37 @@ class BaileysWhatsAppClient {
 
   async getUserPreferences(userId) {
     try {
-      return await this.memoryStore.getUserPreferences(userId);
+      const memories = await this.db.getMemories(userId, 'whatsapp_conversation', 100);
+      
+      const preferences = {
+        topics: [],
+        interests: [],
+        commonWords: [],
+        responsePatterns: []
+      };
+
+      // Extract patterns from conversation
+      const allMessages = memories.map(m => m.message.toLowerCase());
+      const allText = allMessages.join(' ');
+
+      // Simple keyword extraction
+      const words = allText.split(/\W+/).filter(w => w.length > 4);
+      const wordCount = {};
+
+      words.forEach(word => {
+        wordCount[word] = (wordCount[word] || 0) + 1;
+      });
+
+      // Get most common words
+      const sortedWords = Object.entries(wordCount)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([word]) => word);
+
+      preferences.commonWords = sortedWords;
+      preferences.topics = sortedWords.slice(0, 5);
+
+      return preferences;
     } catch (error) {
       console.error('Error getting user preferences:', error);
       return {};
@@ -341,7 +400,15 @@ class BaileysWhatsAppClient {
 
   async getConversationHistory(userId, limit = 20) {
     try {
-      return await this.memoryStore.getConversationHistory(userId, limit);
+      const memories = await this.db.getMemories(userId, 'whatsapp_conversation', limit);
+      return memories.map(m => ({
+        id: m.id,
+        userId: m.userId,
+        conversationId: m.conversationId,
+        message: m.message,
+        timestamp: m.timestamp,
+        metadata: m.metadata
+      }));
     } catch (error) {
       console.error('Error getting conversation history:', error);
       return [];
@@ -350,7 +417,7 @@ class BaileysWhatsAppClient {
 
   async getMonitoredMessages(limit = 50, offset = 0) {
     try {
-      return await this.memoryStore.getMonitoredMessages(limit, offset);
+      return await this.db.getMonitoredMessages(limit, offset);
     } catch (error) {
       console.error('Error getting monitored messages:', error);
       return [];
@@ -359,7 +426,7 @@ class BaileysWhatsAppClient {
 
   async getUnreadMessages(limit = 50) {
     try {
-      return await this.memoryStore.getUnreadMessages(limit);
+      return await this.db.getUnreadMessages(limit);
     } catch (error) {
       console.error('Error getting unread messages:', error);
       return [];
@@ -368,7 +435,7 @@ class BaileysWhatsAppClient {
 
   async markAsRead(messageIds) {
     try {
-      return await this.memoryStore.markAsRead(messageIds);
+      return await this.db.markAsRead(messageIds);
     } catch (error) {
       console.error('Error marking messages as read:', error);
       return 0;
@@ -377,7 +444,9 @@ class BaileysWhatsAppClient {
 
   async getMonitoredMessagesByType(type, limit = 50) {
     try {
-      return await this.memoryStore.getMonitoredMessagesByType(type, limit);
+      // For SQLite, we'll filter in memory since we don't have complex query methods
+      const allMessages = await this.db.getMonitoredMessages(1000, 0);
+      return allMessages.filter(msg => msg.type === type).slice(0, limit);
     } catch (error) {
       console.error('Error getting monitored messages by type:', error);
       return [];
@@ -386,7 +455,9 @@ class BaileysWhatsAppClient {
 
   async getMonitoredMessagesByUser(userId, limit = 50) {
     try {
-      return await this.memoryStore.getMonitoredMessagesByUser(userId, limit);
+      // For SQLite, we'll filter in memory
+      const allMessages = await this.db.getMonitoredMessages(1000, 0);
+      return allMessages.filter(msg => msg.senderId === userId).slice(0, limit);
     } catch (error) {
       console.error('Error getting monitored messages by user:', error);
       return [];
@@ -395,7 +466,9 @@ class BaileysWhatsAppClient {
 
   async getMonitoredMessagesByGroup(groupId, limit = 50) {
     try {
-      return await this.memoryStore.getMonitoredMessagesByGroup(groupId, limit);
+      // For SQLite, we'll filter in memory
+      const allMessages = await this.db.getMonitoredMessages(1000, 0);
+      return allMessages.filter(msg => msg.groupId === groupId).slice(0, limit);
     } catch (error) {
       console.error('Error getting monitored messages by group:', error);
       return [];
@@ -404,7 +477,7 @@ class BaileysWhatsAppClient {
 
   async getMonitoringStats() {
     try {
-      return await this.memoryStore.getMonitoringStats();
+      return await this.db.getMonitoringStats();
     } catch (error) {
       console.error('Error getting monitoring stats:', error);
       return {};
@@ -418,7 +491,7 @@ class BaileysWhatsAppClient {
 
     try {
       // Store the outgoing message in memory too
-      await this.memoryStore.addMemory(
+      await this.db.addMemory(
         to,  // userId (recipient)
         'whatsapp_conversation',  // conversationId
         text,  // message
@@ -431,6 +504,27 @@ class BaileysWhatsAppClient {
       );
 
       const response = await this.sock.sendMessage(to, { text });
+      
+      // Also add to monitored messages as a sent message
+      const monitoringData = {
+        id: response?.key?.id || 'sent_' + Date.now(),
+        senderId: 'self',
+        senderName: 'You',
+        type: 'text',
+        content: { type: 'text', text },
+        timestamp: Date.now(),
+        isGroupMessage: to.endsWith('@g.us'),
+        fromMe: true,
+        unread: false,
+        priority: 'normal',
+        groupId: to.endsWith('@g.us') ? to : null,
+        groupName: to.endsWith('@g.us') ? to.replace('@g.us', '') : null,
+        messageId: response?.key?.id,
+        rawMessage: response
+      };
+
+      await this.db.addMonitoredMessage(monitoringData);
+      
       return response;
     } catch (error) {
       console.error('Error sending message:', error);
@@ -482,16 +576,28 @@ class BaileysWhatsAppClient {
   // ADVANCED TOOLS
   // ============================================
 
+  async getConversationHistoryByThread(threadId, limit = 50) {
+    try {
+      return await this.db.getConversationHistory(threadId, limit);
+    } catch (error) {
+      console.error('Error getting conversation history by thread:', error);
+      return [];
+    }
+  }
+
   async searchMessages(keyword, limit = 10) {
     try {
-      const messages = this.memoryStore.getAllMessages();
+      const messages = await this.db.getMonitoredMessages(1000, 0);
       const results = messages
-        .filter(m => m.message && m.message.toLowerCase().includes(keyword.toLowerCase()))
+        .filter(m => {
+          const content = typeof m.content === 'string' ? m.content : m.content?.text || '';
+          return content.toLowerCase().includes(keyword.toLowerCase());
+        })
         .slice(0, limit)
         .map(m => ({
           id: m.id,
-          from: m.from,
-          message: m.message,
+          from: m.senderId,
+          message: m.content?.text || m.content,
           timestamp: m.timestamp
         }));
       return results;
@@ -503,16 +609,17 @@ class BaileysWhatsAppClient {
 
   async getMessageHistory(contact, limit = 20) {
     try {
-      const messages = this.memoryStore.getAllMessages()
-        .filter(m => m.from && m.from.includes(contact))
+      const messages = await this.db.getMonitoredMessages(1000, 0);
+      const results = messages
+        .filter(m => m.senderId && m.senderId.includes(contact))
         .slice(-limit)
         .map(m => ({
           id: m.id,
-          from: m.from,
-          message: m.message,
+          from: m.senderId,
+          message: m.content?.text || m.content,
           timestamp: m.timestamp
         }));
-      return messages;
+      return results;
     } catch (error) {
       console.error('Error getting message history:', error);
       throw error;
@@ -545,15 +652,16 @@ class BaileysWhatsAppClient {
   async markAsRead(contact, all = true) {
     try {
       if (!this.sock) throw new Error('Not connected');
-      const messages = this.memoryStore.getAllMessages()
-        .filter(m => m.from && m.from.includes(contact));
+      const messages = await this.db.getMonitoredMessages(1000, 0);
+      const contactMessages = messages.filter(m => m.senderId && m.senderId.includes(contact));
       
-      for (const msg of messages) {
-        if (msg.id) {
-          await this.sock.readMessages([msg.id]);
-        }
+      const messageIds = contactMessages.map(m => m.id).filter(Boolean);
+      if (messageIds.length > 0) {
+        await this.db.markAsRead(messageIds);
+        await this.sock.readMessages(messageIds);
       }
-      return { status: 'success', count: messages.length };
+      
+      return { status: 'success', count: contactMessages.length };
     } catch (error) {
       console.error('Error marking as read:', error);
       throw error;
@@ -601,6 +709,12 @@ class BaileysWhatsAppClient {
 
   isConnected() {
     return this.isReady;
+  }
+
+  async close() {
+    if (this.db) {
+      await this.db.close();
+    }
   }
 }
 

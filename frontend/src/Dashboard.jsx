@@ -82,14 +82,14 @@ export default function Dashboard() {
     try {
       setLoading(true);
       const res = await axios.get(`${API_URL}/monitored-messages?limit=100`); // Fetch more to build better threads
-      let incoming = res.data.messages.filter(m => !m.fromMe && m.type === 'text');
+      let allMessages = res.data.messages.filter(m => m.type === 'text'); // Include both sent and received messages
 
       // Grouping Logic
       const grouped = {};
       let maxTimestamp = 0;
       let newMaxId = lastProcessedId;
 
-      incoming.forEach(msg => {
+      allMessages.forEach(msg => {
         const jid = msg.isGroupMessage ? msg.groupId : msg.senderId;
         
         if (!grouped[jid]) {
@@ -101,13 +101,15 @@ export default function Dashboard() {
             unreadCount: 0,
             hasUrgent: false,
             lastTimestamp: 0,
-            senderId: msg.senderId // Keep reference for drafting
+            senderId: msg.senderId, // Keep reference for drafting
+            hasSentMessages: false // Track if thread has sent messages
           };
         }
 
         grouped[jid].messages.push(msg);
-        if (msg.unread) grouped[jid].unreadCount++;
-        if (msg.priority === 'high') grouped[jid].hasUrgent = true;
+        if (msg.unread && !msg.fromMe) grouped[jid].unreadCount++; // Only count incoming messages as unread
+        if (msg.priority === 'high' && !msg.fromMe) grouped[jid].hasUrgent = true; // Only mark incoming as urgent
+        if (msg.fromMe) grouped[jid].hasSentMessages = true; // Track sent messages
         if (msg.timestamp > grouped[jid].lastTimestamp) grouped[jid].lastTimestamp = msg.timestamp;
         
         if (msg.timestamp > maxTimestamp) maxTimestamp = msg.timestamp;
@@ -131,10 +133,10 @@ export default function Dashboard() {
         return b.lastTimestamp - a.lastTimestamp;
       });
 
-      // Sound Logic
-      // Find the absolute latest message across all threads
-      if (incoming.length > 0) {
-        const latestMsg = incoming.reduce((prev, current) => (prev.timestamp > current.timestamp) ? prev : current);
+      // Sound Logic - only for incoming messages
+      const incomingOnly = allMessages.filter(m => !m.fromMe);
+      if (incomingOnly.length > 0) {
+        const latestMsg = incomingOnly.reduce((prev, current) => (prev.timestamp > current.timestamp) ? prev : current);
         
         if (lastProcessedId && latestMsg.id !== lastProcessedId) {
            playNotificationSound(latestMsg.priority === 'high');
@@ -522,82 +524,220 @@ export default function Dashboard() {
                   markingAsRead.has(thread.id) ? 'opacity-50' : ''
                 }`}
               >
-                {/* Thread Header */}
-                <div className={`px-4 py-3 border-b flex justify-between items-center ${
-                  thread.hasUrgent ? 'bg-red-50' : 'bg-gray-50'
+                {/* Thread Header with Enhanced Separators */}
+                <div className={`px-4 py-3 border-b-2 ${
+                  thread.hasUrgent 
+                    ? 'bg-gradient-to-r from-red-50 via-red-50 to-red-100 border-red-200' 
+                    : 'bg-gradient-to-r from-gray-50 via-white to-gray-50 border-gray-200'
                 }`}>
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    {/* Selection Checkbox */}
-                    <div className="flex-shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={selectedThreads.has(thread.id)}
-                        onChange={() => toggleThreadSelection(thread.id)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                    </div>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-sm ${
-                       thread.hasUrgent ? 'bg-red-500' : thread.isGroup ? 'bg-purple-500' : 'bg-blue-500'
-                    }`}>
-                      {thread.hasUrgent ? <AlertTriangle size={18}/> : thread.isGroup ? <Users size={18}/> : <User size={18}/>}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-gray-900 truncate text-sm">{thread.name}</h3>
-                        {thread.unreadCount > 0 && (
-                          <span className="bg-green-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                            {thread.unreadCount}
-                          </span>
-                        )}
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      {/* Selection Checkbox with Enhanced Styling */}
+                      <div className="flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedThreads.has(thread.id)}
+                          onChange={() => toggleThreadSelection(thread.id)}
+                          className="w-4 h-4 text-blue-600 border-2 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 transition-all duration-200"
+                        />
                       </div>
-                      <p className="text-xs text-gray-500 truncate">
-                        {new Date(thread.lastTimestamp * 1000).toLocaleString(undefined, {
-                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                        })}
-                      </p>
+                      
+                      {/* Avatar with Enhanced Design */}
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shadow-lg border-2 ${
+                         thread.hasUrgent 
+                           ? 'bg-gradient-to-br from-red-500 to-red-600 border-red-300' 
+                           : thread.isGroup 
+                             ? 'bg-gradient-to-br from-purple-500 to-purple-600 border-purple-300'
+                             : 'bg-gradient-to-br from-blue-500 to-blue-600 border-blue-300'
+                      }`}>
+                        {thread.hasUrgent ? <AlertTriangle size={20}/> : thread.isGroup ? <Users size={20}/> : <User size={20}/>}
+                      </div>
+                      
+                      {/* Thread Info with Enhanced Typography */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className={`font-bold truncate text-sm ${
+                            thread.hasUrgent ? 'text-red-900' : 'text-gray-900'
+                          }`}>{thread.name}</h3>
+                          
+                          {/* Status Indicators */}
+                          <div className="flex items-center gap-1">
+                            {thread.unreadCount > 0 && (
+                              <span className="bg-gradient-to-r from-green-500 to-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+                                {thread.unreadCount}
+                              </span>
+                            )}
+                            {thread.hasSentMessages && (
+                              <span className="bg-gradient-to-r from-blue-500 to-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm" title="Contains sent messages">
+                                📤
+                              </span>
+                            )}
+                            {thread.hasUrgent && (
+                              <span className="bg-gradient-to-r from-red-500 to-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm animate-bounce" title="Urgent messages">
+                                ⚠️
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Timestamp and Thread Type */}
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className={`font-medium ${
+                            thread.hasUrgent ? 'text-red-700' : 'text-gray-500'
+                          }`}>
+                            {new Date(thread.lastTimestamp * 1000).toLocaleString(undefined, {
+                              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </span>
+                          
+                          {/* Separator Dot */}
+                          <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
+                          
+                          <span className={`font-medium ${
+                            thread.isGroup ? 'text-purple-600' : 'text-blue-600'
+                          }`}>
+                            {thread.isGroup ? 'Group Chat' : 'Direct Message'}
+                          </span>
+                          
+                          {/* Separator Dot */}
+                          <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
+                          
+                          <span className="text-gray-400">
+                            {thread.messages.length} messages
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Action Buttons with Enhanced Styling */}
+                    <div className="flex items-center gap-1">
+                      {/* Mark as Read Button */}
+                      {thread.unreadCount > 0 && (
+                        <button 
+                          onClick={() => markThreadAsRead(thread)}
+                          disabled={markingAsRead.has(thread.id)}
+                          className="group flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:from-gray-400 disabled:to-gray-500 text-white rounded-full text-xs font-medium transition-all duration-200 shadow-sm hover:shadow-md"
+                          title="Mark as Read"
+                        >
+                          {markingAsRead.has(thread.id) ? (
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Check size={14} />
+                          )}
+                          <span className="hidden sm:inline">Read</span>
+                        </button>
+                      )}
+                      
+                      {/* History Button */}
+                      <button 
+                        onClick={() => openHistory(thread)}
+                        className="group p-2 rounded-full bg-gray-100 hover:bg-blue-100 text-gray-500 hover:text-blue-600 transition-all duration-200 shadow-sm hover:shadow-md"
+                        title="View Full History"
+                      >
+                        <History size={16} />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {thread.unreadCount > 0 && (
-                      <button 
-                        onClick={() => markThreadAsRead(thread)}
-                        disabled={markingAsRead.has(thread.id)}
-                        className="text-green-500 hover:text-green-700 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition p-1 rounded"
-                        title="Mark as Read"
-                      >
-                        {markingAsRead.has(thread.id) ? (
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Check size={18} />
-                        )}
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => openHistory(thread)}
-                      className="text-gray-400 hover:text-blue-600 transition p-1"
-                      title="View Full History"
-                    >
-                      <History size={18} />
-                    </button>
-                  </div>
+                  
+                  {/* Bottom Separator Line */}
+                  <div className={`mt-3 h-px bg-gradient-to-r ${
+                    thread.hasUrgent 
+                      ? 'from-transparent via-red-300 to-transparent'
+                      : 'from-transparent via-gray-300 to-transparent'
+                  }`}></div>
                 </div>
 
-                {/* Chat Bubbles (Show last 3) */}
-                <div className="p-4 flex-1 flex flex-col gap-3 overflow-hidden bg-white/50">
-                  {thread.messages.slice(-3).map((msg, idx) => (
-                    <div key={msg.id || idx} className="flex flex-col items-start max-w-[90%] self-start animate-fade-in">
-                       <div className={`rounded-2xl px-3 py-2 text-sm shadow-sm border ${
-                         msg.priority === 'high' 
-                           ? 'bg-red-50 border-red-200 text-red-900 rounded-tl-none' 
-                           : 'bg-white border-gray-100 text-gray-800 rounded-tl-none'
-                       }`}>
-                         {msg.content.text}
-                       </div>
-                       <span className="text-[10px] text-gray-400 ml-1 mt-0.5">
-                         {new Date(msg.timestamp * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                       </span>
+                {/* Chat Bubbles (Show last 5 with direction indicators) */}
+                <div className="p-4 flex-1 flex flex-col gap-3 overflow-hidden bg-gradient-to-b from-white/50 to-gray-50/30">
+                  {thread.messages.slice(-5).map((msg, idx) => (
+                    <div key={msg.id || idx} className={`flex flex-col max-w-[90%] ${
+                      msg.fromMe ? 'self-end items-end ml-12' : 'self-start items-start mr-12'
+                    } animate-fade-in`}>
+                      {/* Message Bubble */}
+                      <div className={`rounded-2xl px-4 py-2.5 text-sm shadow-lg border-2 ${
+                        msg.fromMe 
+                          ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white border-blue-300 rounded-tr-sm' 
+                          : msg.priority === 'high'
+                            ? 'bg-gradient-to-br from-red-50 to-red-100 border-red-200 text-red-900 rounded-tl-sm' 
+                            : 'bg-gradient-to-br from-white to-gray-50 border-gray-100 text-gray-800 rounded-tl-sm'
+                      }`}>
+                        <div className="flex items-start gap-2">
+                          {!msg.fromMe && (
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                              thread.hasUrgent ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'
+                            }`}>
+                              {thread.isGroup ? (thread.name.charAt(0).toUpperCase()) : (msg.senderName ? msg.senderName.charAt(0).toUpperCase() : '?')}
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            {!thread.isGroup && !msg.fromMe && msg.senderName && (
+                              <div className="text-xs font-medium text-gray-600 mb-1 opacity-75">
+                                {msg.senderName}
+                              </div>
+                            )}
+                            <div className="leading-relaxed">{msg.content.text}</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Message Info with Direction Indicator */}
+                      <div className={`flex items-center gap-2 mt-1 text-[10px] ${
+                        msg.fromMe ? 'flex-row-reverse text-blue-600' : 'text-gray-400'
+                      }`}>
+                        <div className="flex items-center gap-1">
+                          {msg.fromMe ? (
+                            <>
+                              <div className="w-3 h-3 rounded-full bg-blue-100 flex items-center justify-center">
+                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                              </div>
+                              <span className="font-medium">Sent</span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-3 h-3 rounded-full bg-gray-100 flex items-center justify-center">
+                                <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
+                              </div>
+                              <span className="font-medium">Received</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="h-3 w-px bg-gray-200"></div>
+                        <span>
+                          {new Date(msg.timestamp * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </span>
+                        {msg.priority === 'high' && !msg.fromMe && (
+                          <>
+                            <div className="h-3 w-px bg-gray-200"></div>
+                            <span className="text-red-500 font-bold">⚠️ URGENT</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))}
+                  
+                  {/* Separator for thread end */}
+                  <div className="mt-2 border-t border-gray-200/50"></div>
+                  
+                  {/* Thread Summary */}
+                  <div className="flex items-center justify-between text-xs text-gray-500 pt-2">
+                    <div className="flex items-center gap-2">
+                      {thread.hasSentMessages && (
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+                          <span>Sent messages</span>
+                        </div>
+                      )}
+                      {thread.unreadCount > 0 && (
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                          <span>{thread.unreadCount} unread</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-gray-400">
+                      {thread.messages.length} total
+                    </div>
+                  </div>
                 </div>
 
                 {/* Actions / Draft Area */}
