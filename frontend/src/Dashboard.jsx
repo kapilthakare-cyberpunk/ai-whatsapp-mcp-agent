@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { MessageSquare, RefreshCw, Send, Sparkles, Check, User, Users, Pencil, X, AlertTriangle, ChevronDown, ChevronUp, History, FileText, CheckSquare } from 'lucide-react';
+import { MessageSquare, RefreshCw, Send, Sparkles, Check, User, Users, Pencil, X, AlertTriangle, ChevronDown, ChevronUp, History, FileText, CheckSquare, CheckCheck, Eye, Clock } from 'lucide-react';
 
 const API_URL = 'http://localhost:3000';
 
@@ -20,6 +20,9 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState(''); // Search query
   const [filteredThreads, setFilteredThreads] = useState([]); // Filtered threads
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'work', 'personal', etc.
+  const [selectedThreads, setSelectedThreads] = useState(new Set()); // For bulk actions
+  const [showBulkActions, setShowBulkActions] = useState(false); // Toggle bulk actions toolbar
+  const [markingAsRead, setMarkingAsRead] = useState(new Set()); // Track threads being marked as read
   
   // Full History Modal State
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
@@ -248,6 +251,9 @@ export default function Dashboard() {
 
   const markThreadAsRead = async (thread) => {
     try {
+      // Add to marking set for visual feedback
+      setMarkingAsRead(prev => new Set([...prev, thread.id]));
+      
       // Get all message IDs from this thread
       const messageIds = thread.messages.map(m => m.id);
       
@@ -257,14 +263,102 @@ export default function Dashboard() {
       setThreads(prevThreads => prevThreads.filter(t => t.id !== thread.id));
       setFilteredThreads(prevFiltered => prevFiltered.filter(t => t.id !== thread.id));
       
-      // Optional: Show a success message
-      console.log(`✅ Thread ${thread.name} dismissed from preview`);
+      // Clear selection if this thread was selected
+      setSelectedThreads(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(thread.id);
+        return newSet;
+      });
+      
+      console.log(`✅ Thread ${thread.name} marked as read and removed`);
       
     } catch (err) {
       console.error("Failed to mark as read:", err);
       alert("Failed to mark messages as read");
       // Refresh to get accurate state if something went wrong
       fetchMessages();
+    } finally {
+      setMarkingAsRead(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(thread.id);
+        return newSet;
+      });
+    }
+  };
+
+  const markSelectedThreadsAsRead = async () => {
+    if (selectedThreads.size === 0) return;
+    
+    try {
+      setMarkingAsRead(new Set(selectedThreads));
+      
+      const threadsToMark = threads.filter(t => selectedThreads.has(t.id));
+      const allMessageIds = threadsToMark.flatMap(thread => thread.messages.map(m => m.id));
+      
+      await axios.post(`${API_URL}/mark-read`, { messageIds: allMessageIds });
+      
+      // Remove marked threads from display
+      setThreads(prevThreads => prevThreads.filter(t => !selectedThreads.has(t.id)));
+      setFilteredThreads(prevFiltered => prevFiltered.filter(t => !selectedThreads.has(t.id)));
+      setSelectedThreads(new Set());
+      setShowBulkActions(false);
+      
+      console.log(`✅ ${threadsToMark.length} threads marked as read`);
+      
+    } catch (err) {
+      console.error("Failed to mark selected threads as read:", err);
+      alert("Failed to mark selected threads as read");
+      fetchMessages();
+    } finally {
+      setMarkingAsRead(new Set());
+    }
+  };
+
+  const toggleThreadSelection = (threadId) => {
+    setSelectedThreads(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(threadId)) {
+        newSet.delete(threadId);
+      } else {
+        newSet.add(threadId);
+      }
+      
+      // Show bulk actions if any thread is selected
+      setShowBulkActions(newSet.size > 0);
+      
+      return newSet;
+    });
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      if (filteredThreads.length === 0) {
+        alert("No threads to mark as read");
+        return;
+      }
+      
+      if (!confirm(`Mark all ${filteredThreads.length} threads as read?`)) return;
+      
+      setMarkingAsRead(new Set(filteredThreads.map(t => t.id)));
+      
+      const allMessageIds = filteredThreads.flatMap(thread => thread.messages.map(m => m.id));
+      
+      await axios.post(`${API_URL}/mark-read`, { messageIds: allMessageIds });
+      
+      // Clear all threads from display
+      setThreads([]);
+      setFilteredThreads([]);
+      setSelectedThreads(new Set());
+      setShowBulkActions(false);
+      
+      console.log(`✅ All ${filteredThreads.length} threads marked as read`);
+      
+    } catch (err) {
+      console.error("Failed to mark all as read:", err);
+      alert("Failed to mark all threads as read");
+      fetchMessages();
+    } finally {
+      setMarkingAsRead(new Set());
     }
   };
 
@@ -301,15 +395,48 @@ export default function Dashboard() {
       setGeneratingBriefing(false);
     }
   };
-  
-  const markAllAsRead = async () => {
-      // Implementation... (simplified for brevity, assume backend call works)
-      alert("Mark all read not fully implemented in thread view yet.");
-  };
+
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans text-gray-800">
       <div className="max-w-[1600px] mx-auto">
+        {/* Bulk Actions Toolbar */}
+        {showBulkActions && (
+          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <CheckCheck className="w-5 h-5 text-blue-600" />
+                <span className="text-blue-900 font-medium">
+                  {selectedThreads.size} thread{selectedThreads.size > 1 ? 's' : ''} selected
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={markSelectedThreadsAsRead}
+                  disabled={markingAsRead.size > 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition text-sm font-medium"
+                >
+                  {markingAsRead.size > 0 ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCheck className="w-4 h-4" />
+                  )}
+                  Mark as Read
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedThreads(new Set());
+                    setShowBulkActions(false);
+                  }}
+                  className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-100 sticky top-0 z-10">
           <h1 className="text-2xl font-bold flex items-center gap-3 text-gray-900">
@@ -356,6 +483,21 @@ export default function Dashboard() {
             <button onClick={generateBriefing} disabled={generatingBriefing} className="p-2 rounded-full hover:bg-blue-50 text-blue-600">
               {generatingBriefing ? <RefreshCw className="animate-spin w-5 h-5"/> : '📋'}
             </button>
+            {filteredThreads.length > 0 && (
+              <button 
+                onClick={markAllAsRead}
+                disabled={markingAsRead.size > 0}
+                className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition text-sm font-medium"
+                title="Mark all threads as read"
+              >
+                {markingAsRead.size > 0 ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCheck className="w-4 h-4" />
+                )}
+                <span className="hidden sm:inline">Mark All Read</span>
+              </button>
+            )}
             <button onClick={fetchMessages} className="p-2 rounded-full hover:bg-gray-100">
                <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -374,6 +516,10 @@ export default function Dashboard() {
                 key={thread.id} 
                 className={`bg-white rounded-xl shadow-sm border flex flex-col h-full transition hover:shadow-md ${
                   thread.hasUrgent ? 'border-red-400 ring-1 ring-red-100' : 'border-gray-200'
+                } ${
+                  selectedThreads.has(thread.id) ? 'ring-2 ring-blue-500 border-blue-500' : ''
+                } ${
+                  markingAsRead.has(thread.id) ? 'opacity-50' : ''
                 }`}
               >
                 {/* Thread Header */}
@@ -381,6 +527,15 @@ export default function Dashboard() {
                   thread.hasUrgent ? 'bg-red-50' : 'bg-gray-50'
                 }`}>
                   <div className="flex items-center gap-3 overflow-hidden">
+                    {/* Selection Checkbox */}
+                    <div className="flex-shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={selectedThreads.has(thread.id)}
+                        onChange={() => toggleThreadSelection(thread.id)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                    </div>
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-sm ${
                        thread.hasUrgent ? 'bg-red-500' : thread.isGroup ? 'bg-purple-500' : 'bg-blue-500'
                     }`}>
@@ -406,10 +561,15 @@ export default function Dashboard() {
                     {thread.unreadCount > 0 && (
                       <button 
                         onClick={() => markThreadAsRead(thread)}
-                        className="text-green-500 hover:text-green-700 hover:bg-green-50 transition p-1 rounded"
+                        disabled={markingAsRead.has(thread.id)}
+                        className="text-green-500 hover:text-green-700 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition p-1 rounded"
                         title="Mark as Read"
                       >
-                        <Check size={18} />
+                        {markingAsRead.has(thread.id) ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Check size={18} />
+                        )}
                       </button>
                     )}
                     <button 

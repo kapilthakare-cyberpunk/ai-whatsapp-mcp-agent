@@ -1,5 +1,15 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser } = require('@whiskeysockets/baileys');
 const config = require('../config/config');
+
+
+
+
+
+
+
+
+
+
 const MemoryStore = require('./memory-store');
 
 class BaileysWhatsAppClient {
@@ -466,6 +476,127 @@ class BaileysWhatsAppClient {
       console.error('Error sending video:', error);
       throw error;
     }
+  }
+
+  // ============================================
+  // ADVANCED TOOLS
+  // ============================================
+
+  async searchMessages(keyword, limit = 10) {
+    try {
+      const messages = this.memoryStore.getAllMessages();
+      const results = messages
+        .filter(m => m.message && m.message.toLowerCase().includes(keyword.toLowerCase()))
+        .slice(0, limit)
+        .map(m => ({
+          id: m.id,
+          from: m.from,
+          message: m.message,
+          timestamp: m.timestamp
+        }));
+      return results;
+    } catch (error) {
+      console.error('Error searching messages:', error);
+      throw error;
+    }
+  }
+
+  async getMessageHistory(contact, limit = 20) {
+    try {
+      const messages = this.memoryStore.getAllMessages()
+        .filter(m => m.from && m.from.includes(contact))
+        .slice(-limit)
+        .map(m => ({
+          id: m.id,
+          from: m.from,
+          message: m.message,
+          timestamp: m.timestamp
+        }));
+      return messages;
+    } catch (error) {
+      console.error('Error getting message history:', error);
+      throw error;
+    }
+  }
+
+  async getContactList(filter = null) {
+    try {
+      const chats = this.sock.store?.chats || [];
+      let contacts = chats.map(chat => ({
+        id: chat.id,
+        name: chat.name,
+        isGroup: chat.isGroup,
+        unread: chat.unreadCount,
+        lastMessage: chat.lastMessageTimestamp
+      }));
+
+      if (filter) {
+        contacts = contacts.filter(c => 
+          c.name.toLowerCase().includes(filter.toLowerCase())
+        );
+      }
+      return contacts;
+    } catch (error) {
+      console.error('Error getting contacts:', error);
+      throw error;
+    }
+  }
+
+  async markAsRead(contact, all = true) {
+    try {
+      if (!this.sock) throw new Error('Not connected');
+      const messages = this.memoryStore.getAllMessages()
+        .filter(m => m.from && m.from.includes(contact));
+      
+      for (const msg of messages) {
+        if (msg.id) {
+          await this.sock.readMessages([msg.id]);
+        }
+      }
+      return { status: 'success', count: messages.length };
+    } catch (error) {
+      console.error('Error marking as read:', error);
+      throw error;
+    }
+  }
+
+  async getChatPreview(limit = 10) {
+    try {
+      const chats = this.sock.store?.chats || [];
+      return chats.slice(0, limit).map(chat => ({
+        id: chat.id,
+        name: chat.name,
+        lastMessage: chat.messages?.[chat.messages.length - 1]?.message || 'No messages',
+        timestamp: chat.messages?.[chat.messages.length - 1]?.messageTimestamp,
+        unread: chat.unreadCount
+      }));
+    } catch (error) {
+      console.error('Error getting chat preview:', error);
+      throw error;
+    }
+  }
+
+  async createGroup(groupName, members) {
+    try {
+      if (!this.sock) throw new Error('Not connected');
+      
+      // Get member JIDs
+      const memberJids = members.map(m => this.normalizeJID(m));
+      
+      // Create the group
+      const response = await this.sock.groupCreate(groupName, memberJids);
+      return response.gid;
+    } catch (error) {
+      console.error('Error creating group:', error);
+      throw error;
+    }
+  }
+
+  normalizeJID(input) {
+    // Convert phone number or name to proper JID format
+    if (input.includes('@')) return input;
+    const number = input.replace(/\D/g, '');
+    return `${number}@s.whatsapp.net`;
   }
 
   isConnected() {

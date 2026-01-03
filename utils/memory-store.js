@@ -72,7 +72,8 @@ class MemoryStore {
 
     // Keep only recent memories (limit to 50 per conversation to prevent memory bloat)
     if (this.memories.get(userKey).length > 50) {
-      this.memories.get(userKey) = this.memories.get(userKey).slice(-50);
+      const trimmedMemories = this.memories.get(userKey).slice(-50);
+      this.memories.set(userKey, trimmedMemories);
     }
 
     await this.saveMemories();
@@ -98,7 +99,8 @@ class MemoryStore {
 
     // Keep only recent monitoring data (limit to 1000 entries to prevent file bloat)
     if (this.monitoringData.get('messages').length > 1000) {
-      this.monitoringData.get('messages') = this.monitoringData.get('messages').slice(-1000);
+      const trimmedMessages = this.monitoringData.get('messages').slice(-1000);
+      this.monitoringData.set('messages', trimmedMessages);
     }
 
     await this.saveMonitoringData();
@@ -423,7 +425,8 @@ class MemoryStore {
 
     // Keep only recent tasks (limit to 500)
     if (this.detectedTasks.get('tasks').length > 500) {
-      this.detectedTasks.get('tasks') = this.detectedTasks.get('tasks').slice(-500);
+      const trimmedTasks = this.detectedTasks.get('tasks').slice(-500);
+      this.detectedTasks.set('tasks', trimmedTasks);
     }
 
     console.log(`📝 Stored detected task: "${taskData.task.task}" from ${taskData.senderName}`);
