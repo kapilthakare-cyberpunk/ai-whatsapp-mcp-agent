@@ -1,10 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { useMonitoredMessages, useGenerateDraft, useSendMessage, useStatus } from './api/hooks';
+import { Toaster, toast } from 'sonner';
+import { useGenerateDraft, useMonitoredMessages, useSendMessage, useStatus } from './api/hooks';
 import type { Tone } from './api/schemas';
-import { toast } from 'sonner';
-
-// Temporary: keep the current dashboard logic minimal while we migrate.
-// Next commits will split into components and add shadcn/ui.
 
 type MonitoredMessage = {
   id: string;
@@ -53,7 +50,9 @@ export default function Dashboard() {
       if (!grouped[jid]) {
         grouped[jid] = {
           id: jid,
-          name: msg.isGroupMessage ? (msg.groupName || jid.replace('@g.us', '')) : (msg.senderName || jid.split('@')[0]),
+          name: msg.isGroupMessage
+            ? msg.groupName || jid.replace('@g.us', '')
+            : msg.senderName || jid.split('@')[0],
           isGroup: Boolean(msg.isGroupMessage),
           messages: [],
           unreadCount: 0,
@@ -80,7 +79,7 @@ export default function Dashboard() {
   }, [messages]);
 
   const selectedThread = useMemo(
-    () => threads.find(t => t.id === selectedThreadId) || null,
+    () => threads.find((t) => t.id === selectedThreadId) || null,
     [threads, selectedThreadId]
   );
 
@@ -97,7 +96,7 @@ export default function Dashboard() {
       });
 
       const text = res?.draft?.text || res?.draft || '';
-      setDrafts(prev => ({ ...prev, [latestMsg.id]: { text, tone } }));
+      setDrafts((prev) => ({ ...prev, [latestMsg.id]: { text, tone } }));
       toast.success('Draft generated');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to generate draft');
@@ -122,6 +121,8 @@ export default function Dashboard() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', fontFamily: 'system-ui, sans-serif' }}>
+      <Toaster richColors />
+
       <div style={{ width: 360, borderRight: '1px solid #eee', padding: 12, overflow: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
@@ -136,7 +137,7 @@ export default function Dashboard() {
           <div>Loading…</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {threads.map(t => (
+            {threads.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setSelectedThreadId(t.id)}
@@ -152,7 +153,15 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ fontWeight: 600 }}>{t.name}</div>
                   {t.unreadCount > 0 && (
-                    <div style={{ fontSize: 12, background: '#2563eb', color: 'white', padding: '2px 8px', borderRadius: 999 }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        background: '#2563eb',
+                        color: 'white',
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                      }}
+                    >
                       {t.unreadCount}
                     </div>
                   )}
@@ -174,87 +183,61 @@ export default function Dashboard() {
             <h2 style={{ margin: 0 }}>{selectedThread.name}</h2>
             <div style={{ color: '#666', fontSize: 12, marginBottom: 12 }}>To: {selectedThread.id}</div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-              {selectedThread.messages.slice(-25).map(m => (
-                <div
-                  key={m.id}
-                  style={{
-                    alignSelf: m.fromMe ? 'flex-end' : 'flex-start',
-                    maxWidth: '80%',
-                    background: m.fromMe ? '#dcfce7' : '#f3f4f6',
-                    borderRadius: 12,
-                    padding: '8px 10px',
-                  }}
-                >
-                  <div style={{ fontSize: 14 }}>{m.content?.text}</div>
-                </div>
-              ))}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button onClick={() => onGenerate('professional')} disabled={generateDraft.isPending}>
+                Generate (professional)
+              </button>
+              <button onClick={() => onGenerate('personal')} disabled={generateDraft.isPending}>
+                Generate (personal)
+              </button>
             </div>
 
-            {(() => {
-              const latestMsg = selectedThread.messages[selectedThread.messages.length - 1];
-              const hasDraft = latestMsg ? drafts[latestMsg.id] : null;
-              const isEditing = editingDraft?.msgId === latestMsg?.id;
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+              {selectedThread.messages.slice(-25).map((m) => {
+                const draft = drafts[m.id];
+                const isEditing = editingDraft?.msgId === m.id;
+                return (
+                  <div key={m.id} style={{ border: '1px solid #eee', borderRadius: 10, padding: 10 }}>
+                    <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>
+                      {m.fromMe ? 'You' : m.senderName || m.senderId}
+                    </div>
+                    <div style={{ whiteSpace: 'pre-wrap' }}>{m.content?.text || ''}</div>
 
-              return (
-                <div style={{ borderTop: '1px solid #eee', paddingTop: 12 }}>
-                  {isEditing ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <textarea
-                        rows={4}
-                        value={editingDraft.text}
-                        onChange={e => setEditingDraft({ ...editingDraft, text: e.target.value })}
-                        style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid #ddd' }}
-                      />
-                      <button
-                        onClick={() => onSend(selectedThread.id, editingDraft.text)}
-                        style={{ padding: 10, borderRadius: 10, border: 0, background: '#2563eb', color: 'white' }}
-                      >
-                        Send Now
-                      </button>
-                    </div>
-                  ) : hasDraft ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div style={{ fontSize: 12, color: '#666' }}>Draft ({hasDraft.tone})</div>
-                      <div style={{ background: 'white', border: '1px solid #eee', borderRadius: 10, padding: 12 }}>
-                        {hasDraft.text}
+                    {draft && !isEditing && (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #eee' }}>
+                        <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>Draft ({draft.tone})</div>
+                        <div style={{ whiteSpace: 'pre-wrap' }}>{draft.text}</div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                          <button onClick={() => setEditingDraft({ msgId: m.id, text: draft.text })}>Edit</button>
+                          <button onClick={() => onSend(selectedThread.id, draft.text)} disabled={sendMessage.isPending}>
+                            Send
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button
-                          onClick={() => setEditingDraft({ msgId: latestMsg.id, text: hasDraft.text })}
-                          style={{ padding: 10, borderRadius: 10, border: '1px solid #ddd', background: 'white' }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => onSend(selectedThread.id, hasDraft.text)}
-                          style={{ padding: 10, borderRadius: 10, border: 0, background: '#2563eb', color: 'white' }}
-                        >
-                          Send Now
-                        </button>
+                    )}
+
+                    {isEditing && (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #eee' }}>
+                        <textarea
+                          style={{ width: '100%', minHeight: 100 }}
+                          value={editingDraft.text}
+                          onChange={(e) => setEditingDraft({ msgId: m.id, text: e.target.value })}
+                        />
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                          <button onClick={() => setEditingDraft(null)}>Cancel</button>
+                          <button
+                            onClick={() => onSend(selectedThread.id, editingDraft.text)}
+                            disabled={sendMessage.isPending}
+                          >
+                            Send
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        onClick={() => onGenerate('professional')}
-                        disabled={generateDraft.isPending}
-                        style={{ padding: 10, borderRadius: 10, border: 0, background: '#111827', color: 'white' }}
-                      >
-                        Generate (Professional)
-                      </button>
-                      <button
-                        onClick={() => onGenerate('personal')}
-                        disabled={generateDraft.isPending}
-                        style={{ padding: 10, borderRadius: 10, border: 0, background: '#2563eb', color: 'white' }}
-                      >
-                        Generate (Personal)
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
