@@ -20,7 +20,7 @@ class BaileysWhatsAppClient {
     this.currentQR = null;
     this.authState = null;
     this.db = new SQLiteDatabase();
-    this.taskManager = null; // Will be injected from server
+    this.taskManager = null; // Will be injected from server.js
   }
 
   // Method to inject TaskManager from server.js
@@ -231,7 +231,7 @@ class BaileysWhatsAppClient {
           // AUTO TASK DETECTION - Process text messages for tasks
           if (this.taskManager && !message.key.fromMe) {
             try {
-              console.log(`🔍 Auto-detecting tasks from message: "${content.text.substring(0, 50)}..."`);
+              console.log(`📍 Auto-detecting tasks from message: "${content.text.substring(0, 50)}..."`);
               
               // Get conversation context for better task detection
               const context = await this.getConversationContext(from, 5);
@@ -489,6 +489,9 @@ class BaileysWhatsAppClient {
       throw new Error('WhatsApp client not connected');
     }
 
+    // Accept either a JID (e.g. 123@s.whatsapp.net / 456@g.us) or a phone number.
+    const jid = this.normalizeJID(to);
+
     try {
       // Store the outgoing message in memory too
       await this.db.addMemory(
@@ -503,7 +506,7 @@ class BaileysWhatsAppClient {
         }
       );
 
-      const response = await this.sock.sendMessage(to, { text });
+      const response = await this.sock.sendMessage(jid, { text });
       
       // Also add to monitored messages as a sent message
       const monitoringData = {
@@ -572,9 +575,9 @@ class BaileysWhatsAppClient {
     }
   }
 
-  // ============================================
+  // ==================================
   // ADVANCED TOOLS
-  // ============================================
+  // ==================================
 
   async getConversationHistoryByThread(threadId, limit = 50) {
     try {
