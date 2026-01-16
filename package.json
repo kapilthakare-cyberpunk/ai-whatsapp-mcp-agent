@@ -9,6 +9,7 @@
     "test": "jest",
     "test:llms": "node scripts/test-llms.js",
     "setup:ollama": "bash scripts/setup-ollama.sh",
+    "setup:run": "bash scripts/configure-and-run.sh",
     "health": "curl http://localhost:3000/health && curl http://localhost:3000/health/llm"
   },
   "keywords": [
