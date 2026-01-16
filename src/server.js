@@ -89,6 +89,20 @@ app.get('/status', (req, res) => {
   });
 });
 
+// Endpoint to logout and clear session
+app.post('/logout', async (req, res) => {
+  try {
+    await baileysClient.logoutAndClearSession();
+    res.status(200).json({
+      status: 'success',
+      message: 'Logged out and cleared session. Re-scan QR to connect again.'
+    });
+  } catch (error) {
+    console.error('Error logging out:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 // Endpoint to send messages
 app.post('/send', async (req, res) => {
   try {

@@ -1,5 +1,7 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
+const fs = require('fs').promises;
+const path = require('path');
 const config = require('../config/config');
 const SQLiteDatabase = require('./sqlite-database');
 
@@ -58,6 +60,29 @@ class BaileysWhatsAppClient {
     } catch (error) {
       console.error('Error initializing Baileys client:', error);
       throw error;
+    }
+  }
+
+  async logoutAndClearSession() {
+    try {
+      if (this.sock) {
+        await this.sock.logout();
+      }
+    } catch (error) {
+      console.warn('Logout call failed, continuing to clear session:', error.message);
+    }
+
+    this.isReady = false;
+    this.currentQR = null;
+    this.lastPrintedQR = null;
+    this.sock = null;
+    this.authState = null;
+
+    const sessionDir = path.join(process.cwd(), 'baileys_store_multi');
+    try {
+      await fs.rm(sessionDir, { recursive: true, force: true });
+    } catch (error) {
+      console.warn('Failed to remove session directory:', error.message);
     }
   }
 

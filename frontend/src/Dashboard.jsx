@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [selectedThreads, setSelectedThreads] = useState(new Set()); // For bulk actions
   const [showBulkActions, setShowBulkActions] = useState(false); // Toggle bulk actions toolbar
   const [markingAsRead, setMarkingAsRead] = useState(new Set()); // Track threads being marked as read
+  const [loggingOut, setLoggingOut] = useState(false);
   
   // Full History Modal State
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
@@ -149,6 +150,21 @@ export default function Dashboard() {
       console.error("Failed to fetch messages", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (!confirm('Log out and clear the current WhatsApp session?')) return;
+    try {
+      setLoggingOut(true);
+      await axios.post(`${API_URL}/logout`);
+      setThreads([]);
+      setFilteredThreads([]);
+      alert('Logged out. Re-scan the QR code to connect again.');
+    } catch (err) {
+      alert(err.response?.data?.message || err.message);
+    } finally {
+      setLoggingOut(false);
     }
   };
 
@@ -484,6 +500,14 @@ export default function Dashboard() {
             </button>
             <button onClick={generateBriefing} disabled={generatingBriefing} className="p-2 rounded-full hover:bg-blue-50 text-blue-600">
               {generatingBriefing ? <RefreshCw className="animate-spin w-5 h-5"/> : '📋'}
+            </button>
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="p-2 rounded-full hover:bg-red-50 text-red-600"
+              title="Log out and clear session"
+            >
+              {loggingOut ? <RefreshCw className="animate-spin w-5 h-5"/> : '⏏️'}
             </button>
             {filteredThreads.length > 0 && (
               <button 

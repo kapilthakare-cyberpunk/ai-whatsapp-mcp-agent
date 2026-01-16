@@ -7,22 +7,47 @@ set -e
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 LOG_DIR="$PROJECT_DIR/logs"
 PID_FILE="$PROJECT_DIR/whatsapp-agent.pid"
+CF_LOG="$LOG_DIR/cloudflared.log"
 
 mkdir -p "$LOG_DIR"
+
+is_tty() {
+  [ -t 0 ] || [ -t 1 ]
+}
 
 prompt_value() {
   local label="$1"
   local default="$2"
-  local secret="${3:-false}"
+  local env_name="$3"
+  local secret="${4:-false}"
   local input=""
+  local tty_in="/dev/tty"
+  local use_tty=false
+
+  if [ -n "$env_name" ] && [ -n "${!env_name}" ]; then
+    echo "${!env_name}"
+    return 0
+  fi
+
+  if ! is_tty && [ -r "$tty_in" ]; then
+    use_tty=true
+  fi
 
   if [ "$secret" = "true" ]; then
     printf "%s [%s]: " "$label" "$default"
-    read -r -s input
+    if [ "$use_tty" = true ]; then
+      read -r -s input < "$tty_in"
+    else
+      read -r -s input
+    fi
     printf "\n"
   else
     printf "%s [%s]: " "$label" "$default"
-    read -r input
+    if [ "$use_tty" = true ]; then
+      read -r input < "$tty_in"
+    else
+      read -r input
+    fi
   fi
 
   if [ -z "$input" ]; then
@@ -30,6 +55,20 @@ prompt_value() {
   fi
 
   echo "$input"
+}
+
+prompt_yes_no() {
+  local label="$1"
+  local default="$2"
+  local env_name="$3"
+  local value
+
+  value="$(prompt_value "$label" "$default" "$env_name")"
+  if [[ "$value" =~ ^[Yy]$ ]]; then
+    echo "Y"
+  else
+    echo "N"
+  fi
 }
 
 is_port_listening() {
@@ -47,18 +86,78 @@ is_port_listening() {
   return 1
 }
 
+stop_pid_file() {
+  if [ -f "$PID_FILE" ]; then
+    while read -r pid; do
+      if [ -n "$pid" ] && kill -0 "$pid" >/dev/null 2>&1; then
+        kill "$pid" >/dev/null 2>&1 || true
+      fi
+    done < "$PID_FILE"
+    rm -f "$PID_FILE"
+  fi
+}
+
+full_wipe() {
+  stop_pid_file
+  if command -v lsof >/dev/null 2>&1; then
+    pids=$(lsof -ti:3005 -sTCP:LISTEN 2>/dev/null || true)
+    if [ -n "$pids" ]; then kill $pids; fi
+    pids=$(lsof -ti:3006 -sTCP:LISTEN 2>/dev/null || true)
+    if [ -n "$pids" ]; then kill $pids; fi
+  fi
+  rm -rf "$PROJECT_DIR/baileys_store_multi" "$PROJECT_DIR/whatsapp_data.db"
+}
+
+start_cloudflared_quick() {
+  rm -f "$CF_LOG"
+  nohup cloudflared tunnel --url "http://localhost:$MCP_PORT" > "$CF_LOG" 2>&1 &
+  for i in {1..10}; do
+    url=$(rg -o "https://[a-z0-9-]+\\.trycloudflare\\.com" "$CF_LOG" | tail -n 1)
+    if [ -n "$url" ]; then
+      echo "Cloudflared URL: ${url}/sse"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Cloudflared started. Check logs at $CF_LOG for the public URL."
+}
+
+start_cloudflared_named() {
+  rm -f "$CF_LOG"
+  local tunnel_name
+  tunnel_name=$(rg -o "tunnel:\\s*([^\\s]+)" -r '$1' "$HOME/.cloudflared/config.yml" 2>/dev/null | head -n 1)
+  local hostname
+  hostname=$(rg -o "hostname:\\s*([^\\s]+)" -r '$1' "$HOME/.cloudflared/config.yml" 2>/dev/null | head -n 1)
+  if [ -z "$tunnel_name" ]; then
+    echo "No tunnel name found in ~/.cloudflared/config.yml"
+    return 1
+  fi
+  nohup cloudflared tunnel run "$tunnel_name" > "$CF_LOG" 2>&1 &
+  if [ -n "$hostname" ]; then
+    echo "Cloudflared URL: https://${hostname}/sse"
+  else
+    echo "Cloudflared started. Check logs at $CF_LOG for hostname."
+  fi
+}
+
 echo "WhatsApp MCP Agent setup"
 echo "------------------------"
 
-APP_PORT="$(prompt_value "WhatsApp server port" "3005")"
-MCP_PORT="$(prompt_value "MCP server port (SSE)" "3006")"
-FRONTEND_PORT="$(prompt_value "Frontend port" "5173")"
+APP_PORT="$(prompt_value "WhatsApp server port" "3005" "APP_PORT")"
+MCP_PORT="$(prompt_value "MCP server port (SSE)" "3006" "MCP_PORT")"
+FRONTEND_PORT="$(prompt_value "Frontend port" "5173" "FRONTEND_PORT")"
+WIPE_CONFIRM="$(prompt_yes_no "Full wipe (logout + delete database)? (y/N)" "N" "WIPE_CONFIRM")"
 
-GEMINI_API_KEY="$(prompt_value "Gemini API key (recommended)" "" true)"
-GROQ_API_KEY="$(prompt_value "Groq API key (fallback)" "" true)"
-OLLAMA_BASE_URL="$(prompt_value "Ollama base URL" "http://localhost:11434")"
-OLLAMA_MODEL="$(prompt_value "Ollama model" "llama3.2")"
-TODOIST_API_KEY="$(prompt_value "Todoist API key (optional)" "" true)"
+GEMINI_API_KEY="$(prompt_value "Gemini API key (recommended)" "" "GEMINI_API_KEY" true)"
+GROQ_API_KEY="$(prompt_value "Groq API key (fallback)" "" "GROQ_API_KEY" true)"
+OLLAMA_BASE_URL="$(prompt_value "Ollama base URL" "http://localhost:11434" "OLLAMA_BASE_URL")"
+OLLAMA_MODEL="$(prompt_value "Ollama model" "llama3.2" "OLLAMA_MODEL")"
+TODOIST_API_KEY="$(prompt_value "Todoist API key (optional)" "" "TODOIST_API_KEY" true)"
+
+if [[ "$WIPE_CONFIRM" =~ ^[Yy]$ ]]; then
+  echo "Performing full wipe..."
+  full_wipe
+fi
 
 cat <<EOF > "$PROJECT_DIR/.env"
 # WhatsApp Business Account Configuration (Legacy/Official API)
@@ -127,6 +226,20 @@ else
   echo "MCP server started. Logs: $LOG_DIR/mcp-server.log"
 fi
 
+START_TUNNEL="$(prompt_yes_no "Start Cloudflare tunnel? (y/N)" "N" "START_TUNNEL")"
+if [[ "$START_TUNNEL" =~ ^[Yy]$ ]]; then
+  if [ -f "$HOME/.cloudflared/config.yml" ]; then
+    USE_NAMED="$(prompt_yes_no "Use named tunnel from ~/.cloudflared/config.yml? (y/N)" "Y" "USE_NAMED_TUNNEL")"
+    if [[ "$USE_NAMED" =~ ^[Yy]$ ]]; then
+      start_cloudflared_named
+    else
+      start_cloudflared_quick
+    fi
+  else
+    start_cloudflared_quick
+  fi
+fi
+
 echo ""
-echo "Done. Open the dashboard at: http://localhost:$FRONTEND_PORT"
-echo "MCP SSE URL: http://localhost:$MCP_PORT/sse"
+echo "Done. Open the dashboard at: http://localhost:${FRONTEND_PORT}"
+echo "MCP SSE URL: http://localhost:${MCP_PORT}/sse"
