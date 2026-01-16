@@ -14,6 +14,24 @@ class SQLiteDatabase {
     this.isInitialized = false;
   }
 
+  normalizeTimestamp(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'number') return value;
+    if (typeof value === 'bigint') return Number(value);
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    if (typeof value === 'object') {
+      if (typeof value.toNumber === 'function') return value.toNumber();
+      if (typeof value.toString === 'function') {
+        const parsed = Number(value.toString());
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+    }
+    return null;
+  }
+
   async initialize() {
     return new Promise((resolve, reject) => {
       this.db = new sqlite3.Database(this.dbPath, (err) => {
@@ -153,6 +171,7 @@ class SQLiteDatabase {
 
   async addMonitoredMessage(messageData) {
     const messageId = messageData.id || uuidv4();
+    const normalizedTimestamp = this.normalizeTimestamp(messageData.timestamp);
     
     const query = `
       INSERT OR REPLACE INTO messages (
@@ -169,7 +188,7 @@ class SQLiteDatabase {
       messageData.senderName || null,
       messageData.content?.text || JSON.stringify(messageData.content),
       messageData.type || 'text',
-      messageData.timestamp,
+      normalizedTimestamp ?? Date.now(),
       messageData.isGroupMessage ? 1 : 0,
       messageData.fromMe ? 1 : 0,
       messageData.unread !== undefined ? (messageData.unread ? 1 : 0) : 1,
@@ -458,6 +477,12 @@ class SQLiteDatabase {
 
   // Helper method to convert database row to message object
   dbRowToMessage(row) {
+    const rawMessage = JSON.parse(row.raw_message || '{}');
+    let timestamp = this.normalizeTimestamp(row.timestamp);
+    if (!timestamp) {
+      const rawTimestamp = rawMessage.messageTimestamp || rawMessage?.message?.messageTimestamp;
+      timestamp = this.normalizeTimestamp(rawTimestamp) || row.timestamp;
+    }
     return {
       id: row.id,
       messageId: row.message_id,
@@ -465,14 +490,14 @@ class SQLiteDatabase {
       senderName: row.sender_name,
       type: row.content_type,
       content: this.parseContent(row.content, row.content_type),
-      timestamp: row.timestamp,
+      timestamp,
       isGroupMessage: !!row.is_group_message,
       fromMe: !!row.from_me,
       unread: !!row.unread,
       priority: row.priority,
       groupId: row.group_id,
       groupName: row.group_name,
-      rawMessage: JSON.parse(row.raw_message || '{}')
+      rawMessage
     };
   }
 

@@ -1,16 +1,7 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
 const config = require('../config/config');
-
-
-
-
-
-
-
-
-
-
-const MemoryStore = require('./sqlite-database');
+const SQLiteDatabase = require('./sqlite-database');
 
 class BaileysWhatsAppClient {
   constructor() {
@@ -18,9 +9,28 @@ class BaileysWhatsAppClient {
     this.isReady = false;
     this.qrCallback = null;
     this.currentQR = null;
+    this.lastPrintedQR = null;
     this.authState = null;
     this.db = new SQLiteDatabase();
     this.taskManager = null; // Will be injected from server.js
+  }
+
+  normalizeTimestamp(value) {
+    if (value === null || value === undefined) return Date.now();
+    if (typeof value === 'number') return value;
+    if (typeof value === 'bigint') return Number(value);
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : Date.now();
+    }
+    if (typeof value === 'object') {
+      if (typeof value.toNumber === 'function') return value.toNumber();
+      if (typeof value.toString === 'function') {
+        const parsed = Number(value.toString());
+        return Number.isFinite(parsed) ? parsed : Date.now();
+      }
+    }
+    return Date.now();
   }
 
   // Method to inject TaskManager from server.js
@@ -60,6 +70,13 @@ class BaileysWhatsAppClient {
         if (qr) {
           // Store the QR code for API access
           this.currentQR = qr;
+          if (this.lastPrintedQR !== qr) {
+            this.lastPrintedQR = qr;
+            console.log('\nScan this QR code with WhatsApp:');
+            console.log('-----------------------------------');
+            qrcode.generate(qr, { small: true });
+            console.log('-----------------------------------');
+          }
 
           // Call the QR callback if available
           if (this.qrCallback) {
@@ -154,7 +171,7 @@ class BaileysWhatsAppClient {
       }
 
       const messageId = message.key.id;
-      const timestamp = message.messageTimestamp;
+      const timestamp = this.normalizeTimestamp(message.messageTimestamp);
       const isGroup = from.endsWith('@g.us');
 
       let content = null;

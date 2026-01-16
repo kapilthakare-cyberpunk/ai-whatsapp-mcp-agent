@@ -43,6 +43,21 @@ Add this to your 5ire config file:
 npm start
 ```
 
+### 4b. ChatGPT Web MCP (SSE)
+If you want to connect from the ChatGPT "Custom Tool" MCP UI, run the MCP server in SSE mode:
+
+```bash
+cd /home/kapilt/Projects/ai-whatsapp-mcp-agent/mcp-server
+TRANSPORT=sse PORT=3001 node index.js
+```
+
+Use this MCP Server URL in ChatGPT:
+```
+http://YOUR_HOST:3001/sse
+```
+
+If ChatGPT is running in the browser, `YOUR_HOST` must be reachable from the internet (use a tunnel like Cloudflare or ngrok).
+
 ### 5. Restart 5ire App
 
 Close and reopen Claude Desktop / 5ire app to load the MCP server.
