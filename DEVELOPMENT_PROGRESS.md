@@ -48,9 +48,9 @@
 
 ### API Keys Configuration
 - GEMINI_API_KEY: Primary AI service
-- GROQ_API_KEY: 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
-- MIXTRAL_API_KEY: lMEiAGy6y1ljwvtsY0LBzvUsaFQKFhVj
-- All keys properly secured in .env file
+- GROQ_API_KEY: <redacted>
+- MIXTRAL_API_KEY: <redacted>
+- All keys should live in `.env` only (docs should use placeholders like `gsk_...` or `your_api_key_here`)
 
 ## Architecture Overview
 

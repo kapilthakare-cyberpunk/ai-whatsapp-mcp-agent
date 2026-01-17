@@ -257,7 +257,7 @@ async function main() {
     });
 
     app.post('/message', async (req, res) => {
-      const sessionId = req.query.sessionId;
+      const sessionId = req.query.sessionId || req.get('mcp-session-id');
       const transport = transports.get(sessionId);
       if (!transport) {
         res.status(404).send('Unknown session');

@@ -178,7 +178,7 @@ Be specific, actionable, and concise. Format as bullet points.`;
       max_tokens: 800
     }, {
       headers: {
-        'Authorization': `Bearer ${process.env.REACT_APP_GROQ_API_KEY || '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'}`,
+        'Authorization': `Bearer ${process.env.REACT_APP_GROQ_API_KEY || ''}`,
         'Content-Type': 'application/json'
       }
     });

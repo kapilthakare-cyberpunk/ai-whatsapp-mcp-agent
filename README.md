@@ -98,6 +98,17 @@ This server acts as a bridge between WhatsApp Web and your MCP system using the 
 
 ## Running the Server
 
+### Guided Full Startup (QR + Tunnel)
+
+```bash
+./scripts/configure-and-run.sh
+```
+
+This will:
+- Start the backend and print the WhatsApp QR in the terminal
+- Wait for login, then start the dashboard and MCP SSE server
+- Optionally launch a Cloudflare tunnel
+
 ### Development Mode
 
 ```bash
