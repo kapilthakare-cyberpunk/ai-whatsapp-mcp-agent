@@ -5,7 +5,6 @@ const axios = require('axios');
 const crypto = require('crypto');
 const dotenv = require('dotenv');
 const BaileysWhatsAppClient = require('../utils/baileys-client');
-const TelegramClient = require('../utils/telegram-client');
 const { generateDraft, generateBriefing } = require('../utils/draft-generator');
 const TemplateStore = require('../utils/template-store');
 const TaskManager = require('../utils/task-manager');
@@ -22,7 +21,7 @@ const PORT = config.port;
 const baileysClient = new BaileysWhatsAppClient();
 const templateStore = new TemplateStore();
 const taskManager = new TaskManager();
-const telegramClient = new TelegramClient();
+const TELEGRAM_SERVICE_URL = process.env.TELEGRAM_SERVICE_URL || 'http://localhost:8088';
 
 // Wire TaskManager into BaileysClient for auto task detection
 baileysClient.setTaskManager(taskManager);
@@ -368,23 +367,16 @@ app.post('/backfill', async (req, res) => {
 // ============================================
 
 app.get('/telegram/status', (req, res) => {
-  res.status(200).json({
-    status: telegramClient.isConnected() ? 'connected' : 'not connected',
-    timestamp: new Date().toISOString()
-  });
+  telegramRequest('get', '/status')
+    .then(result => res.status(200).json({ ...result, timestamp: new Date().toISOString() }))
+    .catch(error => res.status(500).json({ status: 'error', message: error.message }));
 });
 
 app.get('/telegram/unread', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
-    if (!telegramClient.isConnected()) {
-      return res.status(500).json({
-        status: 'error',
-        message: 'Telegram client not connected'
-      });
-    }
-
-    const messages = await telegramClient.getUnreadMessages(limit);
+    const result = await telegramRequest('get', '/unread', { params: { limit } });
+    const messages = result.messages || [];
     res.status(200).json({
       status: 'success',
       messages,
@@ -393,6 +385,48 @@ app.get('/telegram/unread', async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting Telegram unread messages:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+app.get('/telegram/messages', async (req, res) => {
+  try {
+    const chatLimit = parseInt(req.query.chatLimit) || 100;
+    const messagesPerChat = parseInt(req.query.messagesPerChat) || 35;
+    const delayMs = parseInt(req.query.delayMs) || 200;
+    const result = await telegramRequest('get', '/messages', {
+      params: { chat_limit: chatLimit, messages_per_chat: messagesPerChat, delay_ms: delayMs }
+    });
+    const messages = result.messages || [];
+    res.status(200).json({
+      status: 'success',
+      messages,
+      count: messages.length
+    });
+  } catch (error) {
+    console.error('Error getting Telegram messages:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+app.get('/telegram/context/:threadId', async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const limit = parseInt(req.query.limit) || 5;
+    const result = await telegramRequest('get', `/history/${threadId}`, { params: { limit } });
+    const history = result.messages || [];
+    const sorted = history.slice().sort((a, b) => a.timestamp - b.timestamp);
+    const context = sorted.map(msg => {
+      const name = msg.fromMe ? 'Me' : (msg.senderName || msg.senderId);
+      return `${name}: ${msg.content?.text || ''}`;
+    }).join('\n');
+    res.status(200).json({
+      status: 'success',
+      threadId,
+      context
+    });
+  } catch (error) {
+    console.error('Error getting Telegram context:', error);
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
@@ -406,18 +440,11 @@ app.post('/telegram/send', async (req, res) => {
         message: 'Missing "to" or "message" in request body'
       });
     }
-    if (!telegramClient.isConnected()) {
-      return res.status(500).json({
-        status: 'error',
-        message: 'Telegram client not connected'
-      });
-    }
-
-    const result = await telegramClient.sendMessage(to, message);
+    await telegramRequest('post', '/send', { data: { to, message } });
     res.status(200).json({
       status: 'success',
       message: 'Telegram message sent successfully',
-      result
+      result: { to }
     });
   } catch (error) {
     console.error('Error sending Telegram message:', error);
@@ -425,23 +452,70 @@ app.post('/telegram/send', async (req, res) => {
   }
 });
 
-app.post('/telegram/mark-read', async (req, res) => {
+app.post('/telegram/process-ai', async (req, res) => {
   try {
-    const { messageIds } = req.body;
-    if (!messageIds || (Array.isArray(messageIds) && messageIds.length === 0)) {
+    const { threadId, message, tone, senderName } = req.body;
+
+    if (!threadId || !message) {
       return res.status(400).json({
         status: 'error',
-        message: 'Missing "messageIds" in request body'
-      });
-    }
-    if (!telegramClient.isConnected()) {
-      return res.status(500).json({
-        status: 'error',
-        message: 'Telegram client not connected'
+        message: 'Missing "threadId" or "message" in request body'
       });
     }
 
-    const count = await telegramClient.markAsRead(messageIds);
+    if (!tone || !['professional', 'personal'].includes(tone)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Missing or invalid "tone" parameter. Must be "professional" or "personal"'
+      });
+    }
+
+    let context = '';
+    try {
+      const result = await telegramRequest('get', `/history/${threadId}`, { params: { limit: 5 } });
+      const history = result.messages || [];
+      const sorted = history.slice().sort((a, b) => a.timestamp - b.timestamp);
+      context = sorted.map(msg => {
+        const name = msg.fromMe ? 'Me' : (msg.senderName || msg.senderId);
+        return `${name}: ${msg.content?.text || ''}`;
+      }).join('\n');
+    } catch (contextError) {
+      console.log('Could not retrieve Telegram context, proceeding with message only:', contextError.message);
+    }
+
+    const draft = await generateDraft({
+      userId: threadId,
+      message,
+      tone,
+      context,
+      senderName: senderName || ''
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Draft response generated successfully',
+      draft,
+      context
+    });
+  } catch (error) {
+    console.error('Error processing Telegram AI:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+app.post('/telegram/mark-read', async (req, res) => {
+  try {
+    const { chatIds, chatId, maxMessageId } = req.body;
+    const hasChatIds = Array.isArray(chatIds) && chatIds.length > 0;
+    if (!hasChatIds && !chatId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Missing "chatIds" or "chatId" in request body'
+      });
+    }
+    const payload = { chatIds: chatIds || undefined, chatId: chatId || undefined, maxMessageId };
+    const result = await telegramRequest('post', '/mark-read', { data: payload });
+    const count = result.count || (hasChatIds ? chatIds.length : 1);
     res.status(200).json({
       status: 'success',
       count,
@@ -456,14 +530,8 @@ app.post('/telegram/mark-read', async (req, res) => {
 app.get('/telegram/chats', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
-    if (!telegramClient.isConnected()) {
-      return res.status(500).json({
-        status: 'error',
-        message: 'Telegram client not connected'
-      });
-    }
-
-    const chats = await telegramClient.getChatPreview(limit);
+    const result = await telegramRequest('get', '/chats', { params: { limit } });
+    const chats = result.chats || [];
     res.status(200).json({
       status: 'success',
       chats,
@@ -479,14 +547,8 @@ app.get('/telegram/history/:threadId', async (req, res) => {
   try {
     const { threadId } = req.params;
     const limit = parseInt(req.query.limit) || 50;
-    if (!telegramClient.isConnected()) {
-      return res.status(500).json({
-        status: 'error',
-        message: 'Telegram client not connected'
-      });
-    }
-
-    const history = await telegramClient.getConversationHistory(threadId, limit);
+    const result = await telegramRequest('get', `/history/${threadId}`, { params: { limit } });
+    const history = result.messages || [];
     res.status(200).json({
       status: 'success',
       threadId,
@@ -501,13 +563,8 @@ app.get('/telegram/history/:threadId', async (req, res) => {
 
 app.get('/telegram/briefing', async (req, res) => {
   try {
-    if (!telegramClient.isConnected()) {
-      return res.status(500).json({
-        status: 'error',
-        message: 'Telegram client not connected'
-      });
-    }
-    const messages = await telegramClient.getUnreadMessages(100);
+    const result = await telegramRequest('get', '/unread', { params: { limit: 100 } });
+    const messages = result.messages || [];
     const summary = await generateBriefing(messages);
     res.status(200).json({
       status: 'success',
@@ -1148,12 +1205,17 @@ async function initializeBaileys() {
   }
 }
 
-async function initializeTelegram() {
+async function telegramRequest(method, path, options = {}) {
   try {
-    await telegramClient.initialize();
-    console.log('Telegram client initialized');
+    const res = await axios({
+      method,
+      url: `${TELEGRAM_SERVICE_URL}${path}`,
+      ...options
+    });
+    return res.data;
   } catch (error) {
-    console.error('Failed to initialize Telegram client:', error);
+    const message = error.response?.data?.detail || error.response?.data?.message || error.message;
+    throw new Error(message);
   }
 }
 
@@ -1283,7 +1345,6 @@ app.get('/health', (req, res) => {
 
 // Initialize Baileys client before starting the server
 initializeBaileys().then(() => {
-  initializeTelegram();
   // Start the server
   const server = app.listen(PORT, () => {
     console.log(`WhatsApp MCP Server is running on port ${PORT}`);

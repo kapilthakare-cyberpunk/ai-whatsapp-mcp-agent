@@ -145,6 +145,20 @@ function createServer() {
             },
           },
         },
+        {
+          name: 'generate_telegram_reply_draft',
+          description: 'Generate AI reply for Telegram (professional/personal tone).',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              threadId: { type: 'string', description: 'Telegram chat ID' },
+              message: { type: 'string', description: 'Message to reply to' },
+              tone: { type: 'string', enum: ['professional', 'personal'], description: 'Reply tone' },
+              senderName: { type: 'string', description: 'Sender display name (optional)' },
+            },
+            required: ['threadId', 'message', 'tone'],
+          },
+        },
       ],
     };
   });
@@ -302,6 +316,22 @@ function createServer() {
             content: [{
               type: 'text',
               text: JSON.stringify(res.data, null, 2),
+            }],
+          };
+        }
+
+        case 'generate_telegram_reply_draft': {
+          const res = await axios.post(`${WHATSAPP_API}/telegram/process-ai`, {
+            threadId: args.threadId,
+            message: args.message,
+            tone: args.tone,
+            senderName: args.senderName || '',
+          });
+          const draft = res.data.draft;
+          return {
+            content: [{
+              type: 'text',
+              text: `📝 ${args.tone.toUpperCase()} TELEGRAM DRAFT:\n\n${draft.text}\n\nConfidence: ${(draft.confidence * 100).toFixed(0)}%`,
             }],
           };
         }

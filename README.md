@@ -109,12 +109,35 @@ This will:
 - Wait for login, then start the dashboard and MCP SSE server
 - Optionally launch a Cloudflare tunnel
 
-### Telegram Module
+### Telegram Module (Telethon User Client)
 
-Set a bot token in `.env` to enable Telegram:
+Create an API app at https://my.telegram.org and set these in `.env`:
 
 ```bash
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+TELEGRAM_API_ID=your_telegram_api_id_here
+TELEGRAM_API_HASH=your_telegram_api_hash_here
+TELEGRAM_PHONE=your_phone_number_here
+TELEGRAM_SERVICE_URL=http://localhost:8088
+```
+
+Start the Telegram service:
+
+```bash
+python3 -m pip install -r telegram_service/requirements.txt
+python3 -m uvicorn telegram_service.app:app --host 0.0.0.0 --port 8088
+```
+
+Or use:
+
+```bash
+./scripts/start-telegram-service.sh
+```
+
+Log in once:
+
+```bash
+curl -X POST http://localhost:8088/login/start -H 'Content-Type: application/json' -d '{"phone":"+1234567890"}'
+curl -X POST http://localhost:8088/login/confirm -H 'Content-Type: application/json' -d '{"phone":"+1234567890","code":"12345"}'
 ```
 
 Then open the Telegram inbox at:

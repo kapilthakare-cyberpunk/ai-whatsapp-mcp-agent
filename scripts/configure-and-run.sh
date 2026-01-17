@@ -306,14 +306,20 @@ if [ "$USE_EXISTING_CONFIG" = true ]; then
   OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-$(extract_env_value "OLLAMA_BASE_URL" "$PROJECT_DIR/.env")}"
   OLLAMA_MODEL="${OLLAMA_MODEL:-$(extract_env_value "OLLAMA_MODEL" "$PROJECT_DIR/.env")}"
   TODOIST_API_KEY="${TODOIST_API_KEY:-$(extract_env_value "TODOIST_API_KEY" "$PROJECT_DIR/.env")}"
-  TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-$(extract_env_value "TELEGRAM_BOT_TOKEN" "$PROJECT_DIR/.env")}"
+  TELEGRAM_API_ID="${TELEGRAM_API_ID:-$(extract_env_value "TELEGRAM_API_ID" "$PROJECT_DIR/.env")}"
+  TELEGRAM_API_HASH="${TELEGRAM_API_HASH:-$(extract_env_value "TELEGRAM_API_HASH" "$PROJECT_DIR/.env")}"
+  TELEGRAM_PHONE="${TELEGRAM_PHONE:-$(extract_env_value "TELEGRAM_PHONE" "$PROJECT_DIR/.env")}"
+  TELEGRAM_SERVICE_URL="${TELEGRAM_SERVICE_URL:-$(extract_env_value "TELEGRAM_SERVICE_URL" "$PROJECT_DIR/.env")}"
 else
   GEMINI_API_KEY="$(prompt_value "Gemini API key (recommended)" "" "GEMINI_API_KEY" true)"
   GROQ_API_KEY="$(prompt_value "Groq API key (fallback)" "" "GROQ_API_KEY" true)"
   OLLAMA_BASE_URL="$(prompt_value "Ollama base URL" "http://localhost:11434" "OLLAMA_BASE_URL")"
   OLLAMA_MODEL="$(prompt_value "Ollama model" "llama3.2" "OLLAMA_MODEL")"
   TODOIST_API_KEY="$(prompt_value "Todoist API key (optional)" "" "TODOIST_API_KEY" true)"
-  TELEGRAM_BOT_TOKEN="$(prompt_value "Telegram bot token (optional)" "" "TELEGRAM_BOT_TOKEN" true)"
+  TELEGRAM_API_ID="$(prompt_value "Telegram API ID (optional)" "" "TELEGRAM_API_ID")"
+  TELEGRAM_API_HASH="$(prompt_value "Telegram API Hash (optional)" "" "TELEGRAM_API_HASH" true)"
+  TELEGRAM_PHONE="$(prompt_value "Telegram phone (optional)" "" "TELEGRAM_PHONE")"
+  TELEGRAM_SERVICE_URL="$(prompt_value "Telegram service URL" "http://localhost:8088" "TELEGRAM_SERVICE_URL")"
 fi
 
 if [[ "$WIPE_CONFIRM" =~ ^[Yy]$ ]]; then
@@ -354,8 +360,11 @@ OLLAMA_MODEL=$OLLAMA_MODEL
 # Task Management: Todoist Integration
 TODOIST_API_KEY=$TODOIST_API_KEY
 
-# Telegram
-TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+# Telegram (Telethon)
+TELEGRAM_API_ID=$TELEGRAM_API_ID
+TELEGRAM_API_HASH=$TELEGRAM_API_HASH
+TELEGRAM_PHONE=$TELEGRAM_PHONE
+TELEGRAM_SERVICE_URL=$TELEGRAM_SERVICE_URL
 
 # Backfill
 AUTO_BACKFILL_ON_STARTUP=true

@@ -48,7 +48,9 @@ export default function TelegramDashboard() {
   const fetchMessages = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/telegram/messages`, { params: { limit: 200 } });
+      const res = await axios.get(`${API_URL}/telegram/messages`, {
+        params: { chatLimit: 100, messagesPerChat: 35, delayMs: 200 }
+      });
       const allMessages = res.data.messages || [];
       const grouped = {};
 
@@ -127,8 +129,11 @@ export default function TelegramDashboard() {
   const markThreadAsRead = async (thread) => {
     try {
       setMarkingAsRead(prev => new Set([...prev, thread.id]));
-      const messageIds = thread.messages.map(m => m.id);
-      await axios.post(`${API_URL}/telegram/mark-read`, { messageIds });
+      const latestMsg = thread.messages[thread.messages.length - 1];
+      await axios.post(`${API_URL}/telegram/mark-read`, {
+        chatId: thread.id,
+        maxMessageId: latestMsg?.id ? Number(latestMsg.id) : undefined
+      });
       setThreads(prevThreads => prevThreads.filter(t => t.id !== thread.id));
       setFilteredThreads(prevFiltered => prevFiltered.filter(t => t.id !== thread.id));
     } catch (error) {
@@ -162,8 +167,8 @@ export default function TelegramDashboard() {
     try {
       setMarkingAsRead(new Set(selectedThreads));
       const threadsToMark = threads.filter(t => selectedThreads.has(t.id));
-      const allMessageIds = threadsToMark.flatMap(thread => thread.messages.map(m => m.id));
-      await axios.post(`${API_URL}/telegram/mark-read`, { messageIds: allMessageIds });
+      const chatIds = threadsToMark.map(thread => thread.id);
+      await axios.post(`${API_URL}/telegram/mark-read`, { chatIds });
       setThreads(prevThreads => prevThreads.filter(t => !selectedThreads.has(t.id)));
       setFilteredThreads(prevFiltered => prevFiltered.filter(t => !selectedThreads.has(t.id)));
       setSelectedThreads(new Set());
@@ -185,8 +190,8 @@ export default function TelegramDashboard() {
       }
       if (!confirm(`Mark all ${filteredThreads.length} threads as read?`)) return;
       setMarkingAsRead(new Set(filteredThreads.map(t => t.id)));
-      const allMessageIds = filteredThreads.flatMap(thread => thread.messages.map(m => m.id));
-      await axios.post(`${API_URL}/telegram/mark-read`, { messageIds: allMessageIds });
+      const chatIds = filteredThreads.map(thread => thread.id);
+      await axios.post(`${API_URL}/telegram/mark-read`, { chatIds });
       setThreads([]);
       setFilteredThreads([]);
       setSelectedThreads(new Set());
