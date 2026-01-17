@@ -140,6 +140,12 @@ curl -X POST http://localhost:8088/login/start -H 'Content-Type: application/jso
 curl -X POST http://localhost:8088/login/confirm -H 'Content-Type: application/json' -d '{"phone":"+1234567890","code":"12345"}'
 ```
 
+Or use:
+
+```bash
+./scripts/telegram-login.sh
+```
+
 Then open the Telegram inbox at:
 `http://localhost:5173/telegram`
 
