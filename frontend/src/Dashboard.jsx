@@ -498,6 +498,13 @@ export default function Dashboard() {
             >
               <FileText className="w-5 h-5" />
             </button>
+            <button
+              onClick={() => navigate('/telegram')}
+              className="p-2 rounded-full hover:bg-sky-50 text-sky-600"
+              title="Telegram Inbox"
+            >
+              💬
+            </button>
             <button onClick={generateBriefing} disabled={generatingBriefing} className="p-2 rounded-full hover:bg-blue-50 text-blue-600">
               {generatingBriefing ? <RefreshCw className="animate-spin w-5 h-5"/> : '📋'}
             </button>

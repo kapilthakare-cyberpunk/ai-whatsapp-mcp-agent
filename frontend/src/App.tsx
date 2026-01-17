@@ -3,6 +3,7 @@ import Dashboard from './Dashboard';
 import BriefingPage from './BriefingPage';
 import TasksPage from './TasksPage';
 import TemplatesPage from './TemplatesPage';
+import TelegramDashboard from './TelegramDashboard';
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
         <Route path="/briefing" element={<BriefingPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/templates" element={<TemplatesPage />} />
+        <Route path="/telegram" element={<TelegramDashboard />} />
       </Routes>
     </Router>
   );

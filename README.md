@@ -109,6 +109,27 @@ This will:
 - Wait for login, then start the dashboard and MCP SSE server
 - Optionally launch a Cloudflare tunnel
 
+### Telegram Module
+
+Set a bot token in `.env` to enable Telegram:
+
+```bash
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+```
+
+Then open the Telegram inbox at:
+`http://localhost:5173/telegram`
+
+### Backfill Recent WhatsApp Chats
+
+To backfill recent messages after a wipe:
+
+```bash
+curl -X POST http://localhost:3005/backfill \
+  -H 'Content-Type: application/json' \
+  -d '{"chatLimit":100,"messagesPerChat":35,"delayMs":250}'
+```
+
 ### Development Mode
 
 ```bash

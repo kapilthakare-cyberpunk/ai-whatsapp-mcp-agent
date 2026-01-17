@@ -5,6 +5,7 @@ const axios = require('axios');
 const crypto = require('crypto');
 const dotenv = require('dotenv');
 const BaileysWhatsAppClient = require('../utils/baileys-client');
+const TelegramClient = require('../utils/telegram-client');
 const { generateDraft, generateBriefing } = require('../utils/draft-generator');
 const TemplateStore = require('../utils/template-store');
 const TaskManager = require('../utils/task-manager');
@@ -21,6 +22,7 @@ const PORT = config.port;
 const baileysClient = new BaileysWhatsAppClient();
 const templateStore = new TemplateStore();
 const taskManager = new TaskManager();
+const telegramClient = new TelegramClient();
 
 // Wire TaskManager into BaileysClient for auto task detection
 baileysClient.setTaskManager(taskManager);
@@ -325,6 +327,194 @@ app.get('/unread', async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting unread messages:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// Backfill recent messages across chats
+app.post('/backfill', async (req, res) => {
+  try {
+    const {
+      chatLimit = 100,
+      messagesPerChat = 35,
+      delayMs = 250
+    } = req.body || {};
+
+    if (!baileysClient.isConnected()) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Not connected to WhatsApp'
+      });
+    }
+
+    const result = await baileysClient.backfillRecentChats({
+      chatLimit,
+      messagesPerChat,
+      delayMs
+    });
+
+    res.status(200).json({
+      status: 'success',
+      result
+    });
+  } catch (error) {
+    console.error('Error backfilling messages:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ============================================
+// TELEGRAM ENDPOINTS
+// ============================================
+
+app.get('/telegram/status', (req, res) => {
+  res.status(200).json({
+    status: telegramClient.isConnected() ? 'connected' : 'not connected',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/telegram/unread', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    if (!telegramClient.isConnected()) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Telegram client not connected'
+      });
+    }
+
+    const messages = await telegramClient.getUnreadMessages(limit);
+    res.status(200).json({
+      status: 'success',
+      messages,
+      count: messages.length,
+      message: 'Unread Telegram messages retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting Telegram unread messages:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+app.post('/telegram/send', async (req, res) => {
+  try {
+    const { to, message } = req.body;
+    if (!to || !message) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Missing "to" or "message" in request body'
+      });
+    }
+    if (!telegramClient.isConnected()) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Telegram client not connected'
+      });
+    }
+
+    const result = await telegramClient.sendMessage(to, message);
+    res.status(200).json({
+      status: 'success',
+      message: 'Telegram message sent successfully',
+      result
+    });
+  } catch (error) {
+    console.error('Error sending Telegram message:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+app.post('/telegram/mark-read', async (req, res) => {
+  try {
+    const { messageIds } = req.body;
+    if (!messageIds || (Array.isArray(messageIds) && messageIds.length === 0)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Missing "messageIds" in request body'
+      });
+    }
+    if (!telegramClient.isConnected()) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Telegram client not connected'
+      });
+    }
+
+    const count = await telegramClient.markAsRead(messageIds);
+    res.status(200).json({
+      status: 'success',
+      count,
+      message: `${count} Telegram messages marked as read`
+    });
+  } catch (error) {
+    console.error('Error marking Telegram messages as read:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+app.get('/telegram/chats', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    if (!telegramClient.isConnected()) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Telegram client not connected'
+      });
+    }
+
+    const chats = await telegramClient.getChatPreview(limit);
+    res.status(200).json({
+      status: 'success',
+      chats,
+      count: chats.length
+    });
+  } catch (error) {
+    console.error('Error getting Telegram chats:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+app.get('/telegram/history/:threadId', async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const limit = parseInt(req.query.limit) || 50;
+    if (!telegramClient.isConnected()) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Telegram client not connected'
+      });
+    }
+
+    const history = await telegramClient.getConversationHistory(threadId, limit);
+    res.status(200).json({
+      status: 'success',
+      threadId,
+      count: history.length,
+      messages: history
+    });
+  } catch (error) {
+    console.error('Error getting Telegram history:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+app.get('/telegram/briefing', async (req, res) => {
+  try {
+    if (!telegramClient.isConnected()) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Telegram client not connected'
+      });
+    }
+    const messages = await telegramClient.getUnreadMessages(100);
+    const summary = await generateBriefing(messages);
+    res.status(200).json({
+      status: 'success',
+      summary
+    });
+  } catch (error) {
+    console.error('Error generating Telegram briefing:', error);
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
@@ -958,6 +1148,15 @@ async function initializeBaileys() {
   }
 }
 
+async function initializeTelegram() {
+  try {
+    await telegramClient.initialize();
+    console.log('Telegram client initialized');
+  } catch (error) {
+    console.error('Failed to initialize Telegram client:', error);
+  }
+}
+
 // ============================================
 // ADVANCED WHATSAPP TOOLS ENDPOINTS
 // ============================================
@@ -1084,6 +1283,7 @@ app.get('/health', (req, res) => {
 
 // Initialize Baileys client before starting the server
 initializeBaileys().then(() => {
+  initializeTelegram();
   // Start the server
   const server = app.listen(PORT, () => {
     console.log(`WhatsApp MCP Server is running on port ${PORT}`);
@@ -1092,6 +1292,7 @@ initializeBaileys().then(() => {
     console.log(`Send message endpoint: POST http://localhost:${PORT}/send`);
     console.log(`Health check endpoint: GET http://localhost:${PORT}/health`);
     console.log(`Advanced endpoints available at /search, /history, /contacts, /chats, /create-group`);
+    console.log(`Telegram endpoints available at /telegram/status, /telegram/unread, /telegram/send, /telegram/briefing`);
   });
 });
 

@@ -306,12 +306,14 @@ if [ "$USE_EXISTING_CONFIG" = true ]; then
   OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-$(extract_env_value "OLLAMA_BASE_URL" "$PROJECT_DIR/.env")}"
   OLLAMA_MODEL="${OLLAMA_MODEL:-$(extract_env_value "OLLAMA_MODEL" "$PROJECT_DIR/.env")}"
   TODOIST_API_KEY="${TODOIST_API_KEY:-$(extract_env_value "TODOIST_API_KEY" "$PROJECT_DIR/.env")}"
+  TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-$(extract_env_value "TELEGRAM_BOT_TOKEN" "$PROJECT_DIR/.env")}"
 else
   GEMINI_API_KEY="$(prompt_value "Gemini API key (recommended)" "" "GEMINI_API_KEY" true)"
   GROQ_API_KEY="$(prompt_value "Groq API key (fallback)" "" "GROQ_API_KEY" true)"
   OLLAMA_BASE_URL="$(prompt_value "Ollama base URL" "http://localhost:11434" "OLLAMA_BASE_URL")"
   OLLAMA_MODEL="$(prompt_value "Ollama model" "llama3.2" "OLLAMA_MODEL")"
   TODOIST_API_KEY="$(prompt_value "Todoist API key (optional)" "" "TODOIST_API_KEY" true)"
+  TELEGRAM_BOT_TOKEN="$(prompt_value "Telegram bot token (optional)" "" "TELEGRAM_BOT_TOKEN" true)"
 fi
 
 if [[ "$WIPE_CONFIRM" =~ ^[Yy]$ ]]; then
@@ -351,6 +353,12 @@ OLLAMA_MODEL=$OLLAMA_MODEL
 
 # Task Management: Todoist Integration
 TODOIST_API_KEY=$TODOIST_API_KEY
+
+# Telegram
+TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+
+# Backfill
+AUTO_BACKFILL_ON_STARTUP=true
 
 # Server Configuration
 PORT=$APP_PORT

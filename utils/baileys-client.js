@@ -15,6 +15,16 @@ class BaileysWhatsAppClient {
     this.authState = null;
     this.db = new SQLiteDatabase();
     this.taskManager = null; // Will be injected from server.js
+    this.chatCache = new Map();
+    this.lastMessageByChat = new Map();
+    this.autoBackfillEnabled = false;
+    this.autoBackfillStarted = false;
+    this.backfillInProgress = false;
+    this.autoBackfillConfig = {
+      chatLimit: 100,
+      messagesPerChat: 35,
+      delayMs: 250
+    };
   }
 
   normalizeTimestamp(value) {
@@ -44,6 +54,10 @@ class BaileysWhatsAppClient {
     try {
       // Initialize the SQLite database
       await this.db.initialize();
+
+      const autoBackfillFlag = process.env.AUTO_BACKFILL_ON_STARTUP !== 'false';
+      const totalMessages = await this.db.getTotalMessagesCount();
+      this.autoBackfillEnabled = autoBackfillFlag && totalMessages === 0;
       
       // Initialize auth state separately
       const { state, saveCreds } = await useMultiFileAuthState('./baileys_store_multi');
@@ -53,6 +67,7 @@ class BaileysWhatsAppClient {
         auth: state,
         printQRInTerminal: false, // We'll handle QR codes ourselves
         browser: ['Qwen MCP Server', 'Safari', '1.0.0'],
+        syncFullHistory: this.autoBackfillEnabled
       });
 
       this.setupConnectionHandlers();
@@ -131,6 +146,10 @@ class BaileysWhatsAppClient {
           console.log('Connected to WhatsApp Web!');
           this.isReady = true;
           this.currentQR = null; // Clear QR code on success
+          if (this.autoBackfillEnabled && !this.autoBackfillStarted) {
+            this.autoBackfillStarted = true;
+            this.scheduleAutoBackfill();
+          }
         }
       }
 
@@ -143,8 +162,25 @@ class BaileysWhatsAppClient {
       if (events['messages.upsert']) {
         const { messages } = events['messages.upsert'];
         for (const msg of messages) {
+          this.updateChatCacheFromMessage(msg);
           await this.handleIncomingMessage(msg);
         }
+      }
+
+      if (events['chats.set']) {
+        this.upsertChats(events['chats.set'].chats || []);
+      }
+
+      if (events['chats.upsert']) {
+        this.upsertChats(events['chats.upsert'] || []);
+      }
+
+      if (events['chats.update']) {
+        this.updateChats(events['chats.update'] || []);
+      }
+
+      if (events['messaging-history.set']) {
+        await this.ingestHistorySync(events['messaging-history.set']);
       }
     });
   }
@@ -338,6 +374,172 @@ class BaileysWhatsAppClient {
     } catch (error) {
       console.error('Error handling incoming message:', error);
     }
+  }
+
+  updateChatCacheFromMessage(message) {
+    if (!message?.key?.remoteJid) return;
+    const chatId = jidNormalizedUser(message.key.remoteJid);
+    const timestamp = this.normalizeTimestamp(message.messageTimestamp);
+    const existing = this.chatCache.get(chatId) || { id: chatId };
+    const updated = {
+      ...existing,
+      id: chatId,
+      lastMessageTimestamp: timestamp
+    };
+    this.chatCache.set(chatId, updated);
+    this.lastMessageByChat.set(chatId, message);
+  }
+
+  upsertChats(chats) {
+    chats.forEach(chat => {
+      if (!chat?.id) return;
+      const chatId = jidNormalizedUser(chat.id);
+      const lastMessage = chat.messages?.[0]?.message;
+      const lastTimestamp = chat.lastMessageTimestamp || lastMessage?.messageTimestamp;
+      const existing = this.chatCache.get(chatId) || {};
+      const updated = {
+        ...existing,
+        ...chat,
+        id: chatId,
+        lastMessageTimestamp: this.normalizeTimestamp(lastTimestamp)
+      };
+      this.chatCache.set(chatId, updated);
+      if (lastMessage?.key) {
+        this.lastMessageByChat.set(chatId, lastMessage);
+      }
+    });
+  }
+
+  updateChats(updates) {
+    updates.forEach(update => {
+      if (!update?.id) return;
+      const chatId = jidNormalizedUser(update.id);
+      const existing = this.chatCache.get(chatId) || {};
+      this.chatCache.set(chatId, { ...existing, ...update, id: chatId });
+    });
+  }
+
+  async ingestHistorySync(data) {
+    const chats = data?.chats || [];
+    const messages = data?.messages || [];
+
+    if (chats.length) {
+      this.upsertChats(chats);
+    }
+
+    if (!messages.length) return;
+
+    let allowlist = null;
+    if (this.autoBackfillEnabled && this.autoBackfillStarted) {
+      const sortedChats = chats
+        .slice()
+        .sort((a, b) => {
+          const aTime = this.normalizeTimestamp(a.lastMessageTimestamp || a.messages?.[0]?.message?.messageTimestamp);
+          const bTime = this.normalizeTimestamp(b.lastMessageTimestamp || b.messages?.[0]?.message?.messageTimestamp);
+          return bTime - aTime;
+        })
+        .slice(0, this.autoBackfillConfig.chatLimit);
+      allowlist = new Set(sortedChats.map(chat => jidNormalizedUser(chat.id)));
+    }
+
+    const perChatCounts = new Map();
+    for (const msg of messages) {
+      const chatId = msg?.key?.remoteJid ? jidNormalizedUser(msg.key.remoteJid) : null;
+      if (!chatId) continue;
+
+      if (allowlist && !allowlist.has(chatId)) continue;
+
+      const count = perChatCounts.get(chatId) || 0;
+      if (allowlist && count >= this.autoBackfillConfig.messagesPerChat) {
+        continue;
+      }
+      perChatCounts.set(chatId, count + 1);
+
+      this.updateChatCacheFromMessage(msg);
+      await this.handleIncomingMessage(msg);
+    }
+  }
+
+  async scheduleAutoBackfill() {
+    const waitStart = Date.now();
+    while (this.chatCache.size === 0 && Date.now() - waitStart < 15000) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    if (this.chatCache.size === 0) {
+      console.warn('Auto backfill skipped: no chats available yet.');
+      return;
+    }
+    await this.backfillRecentChats(this.autoBackfillConfig);
+    this.autoBackfillEnabled = false;
+  }
+
+  async backfillRecentChats(options = {}) {
+    if (!this.sock || !this.isReady) {
+      throw new Error('WhatsApp client not connected');
+    }
+    if (this.backfillInProgress) {
+      throw new Error('Backfill already in progress');
+    }
+
+    const chatLimit = Number(options.chatLimit) || this.autoBackfillConfig.chatLimit;
+    const messagesPerChat = Number(options.messagesPerChat) || this.autoBackfillConfig.messagesPerChat;
+    const delayMs = Number(options.delayMs) || this.autoBackfillConfig.delayMs;
+
+    this.backfillInProgress = true;
+    const results = {
+      chatLimit,
+      messagesPerChat,
+      delayMs,
+      chatsProcessed: 0,
+      chatsSkipped: 0,
+      messagesRequested: 0,
+      errors: []
+    };
+
+    try {
+      const chats = Array.from(this.chatCache.values())
+        .sort((a, b) => (b.lastMessageTimestamp || 0) - (a.lastMessageTimestamp || 0))
+        .slice(0, chatLimit);
+
+      for (const chat of chats) {
+        const chatId = chat.id;
+        if (!chatId) {
+          results.chatsSkipped += 1;
+          continue;
+        }
+
+        const existingCount = await this.db.getMessageCountForThread(chatId);
+        if (existingCount >= messagesPerChat) {
+          results.chatsSkipped += 1;
+          continue;
+        }
+
+        const needed = messagesPerChat - existingCount;
+        const lastMessage = this.lastMessageByChat.get(chatId);
+        if (!lastMessage?.key) {
+          results.chatsSkipped += 1;
+          continue;
+        }
+
+        try {
+          await this.handleIncomingMessage(lastMessage);
+          const rawTimestamp = this.normalizeTimestamp(lastMessage.messageTimestamp);
+          const timestampMs = rawTimestamp < 1000000000000 ? rawTimestamp * 1000 : rawTimestamp;
+          await this.sock.fetchMessageHistory(needed, lastMessage.key, timestampMs);
+          results.messagesRequested += needed;
+          results.chatsProcessed += 1;
+        } catch (error) {
+          results.errors.push({ chatId, error: error.message });
+        }
+
+        if (delayMs > 0) {
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      }
+    } finally {
+      this.backfillInProgress = false;
+    }
+    return results;
   }
 
   async emitMCPEvent(event) {

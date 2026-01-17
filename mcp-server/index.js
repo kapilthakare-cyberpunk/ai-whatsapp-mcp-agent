@@ -81,6 +81,70 @@ function createServer() {
           description: 'Check WhatsApp connection status.',
           inputSchema: { type: 'object', properties: {} },
         },
+        {
+          name: 'list_chats',
+          description: 'List recent WhatsApp chats.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              limit: { type: 'number', description: 'Max chats (default: 50)', default: 50 },
+            },
+          },
+        },
+        {
+          name: 'backfill_recent_chats',
+          description: 'Backfill recent messages across chats into the database.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              chatLimit: { type: 'number', description: 'Number of chats to backfill (default: 100)', default: 100 },
+              messagesPerChat: { type: 'number', description: 'Messages per chat (default: 35)', default: 35 },
+              delayMs: { type: 'number', description: 'Delay between chats in ms (default: 250)', default: 250 },
+            },
+          },
+        },
+        {
+          name: 'get_telegram_unread_messages',
+          description: 'Get all unread Telegram messages.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              limit: { type: 'number', description: 'Max messages (default: 50)', default: 50 },
+            },
+          },
+        },
+        {
+          name: 'send_telegram_message',
+          description: 'Send a Telegram message to a chat.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              to: { type: 'string', description: 'Chat ID' },
+              message: { type: 'string', description: 'Message text' },
+            },
+            required: ['to', 'message'],
+          },
+        },
+        {
+          name: 'get_telegram_status',
+          description: 'Check Telegram connection status.',
+          inputSchema: { type: 'object', properties: {} },
+        },
+        {
+          name: 'get_telegram_briefing',
+          description: 'Get AI briefing of unread Telegram messages.',
+          inputSchema: { type: 'object', properties: {} },
+        },
+        {
+          name: 'list_telegram_chats',
+          description: 'List recent Telegram chats.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              limit: { type: 'number', description: 'Max chats (default: 50)', default: 50 },
+            },
+          },
+        },
       ],
     };
   });
@@ -155,6 +219,89 @@ function createServer() {
             content: [{
               type: 'text',
               text: `🔌 Status: ${res.data.status.toUpperCase()}`,
+            }],
+          };
+        }
+
+        case 'list_chats': {
+          const res = await axios.get(`${WHATSAPP_API}/chats`, {
+            params: { limit: args.limit || 50 },
+          });
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(res.data, null, 2),
+            }],
+          };
+        }
+
+        case 'backfill_recent_chats': {
+          const res = await axios.post(`${WHATSAPP_API}/backfill`, {
+            chatLimit: args.chatLimit || 100,
+            messagesPerChat: args.messagesPerChat || 35,
+            delayMs: args.delayMs || 250,
+          });
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(res.data, null, 2),
+            }],
+          };
+        }
+
+        case 'get_telegram_unread_messages': {
+          const res = await axios.get(`${WHATSAPP_API}/telegram/unread`, {
+            params: { limit: args.limit || 50 },
+          });
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(res.data, null, 2),
+            }],
+          };
+        }
+
+        case 'send_telegram_message': {
+          await axios.post(`${WHATSAPP_API}/telegram/send`, {
+            to: args.to,
+            message: args.message,
+          });
+          return {
+            content: [{
+              type: 'text',
+              text: `✅ Telegram message sent to ${args.to}`,
+            }],
+          };
+        }
+
+        case 'get_telegram_status': {
+          const res = await axios.get(`${WHATSAPP_API}/telegram/status`);
+          return {
+            content: [{
+              type: 'text',
+              text: `📨 Telegram status: ${res.data.status.toUpperCase()}`,
+            }],
+          };
+        }
+
+        case 'get_telegram_briefing': {
+          const res = await axios.get(`${WHATSAPP_API}/telegram/briefing`);
+          return {
+            content: [{
+              type: 'text',
+              text: res.data.summary || 'No unread Telegram messages',
+            }],
+          };
+        }
+
+        case 'list_telegram_chats': {
+          const res = await axios.get(`${WHATSAPP_API}/telegram/chats`, {
+            params: { limit: args.limit || 50 },
+          });
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(res.data, null, 2),
             }],
           };
         }

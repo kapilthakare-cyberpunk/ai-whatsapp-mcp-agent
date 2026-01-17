@@ -475,6 +475,34 @@ class SQLiteDatabase {
     };
   }
 
+  async getTotalMessagesCount() {
+    const row = await this.getQuery('SELECT COUNT(*) as count FROM messages');
+    return row?.count || 0;
+  }
+
+  async getMessageCountForThread(threadId) {
+    const row = await this.getQuery(
+      'SELECT COUNT(*) as count FROM messages WHERE sender_id = ?',
+      [threadId]
+    );
+    return row?.count || 0;
+  }
+
+  async getRecentThreads(limit = 50) {
+    const query = `
+      SELECT 
+        sender_id as thread_id,
+        MAX(timestamp) as last_timestamp,
+        MAX(sender_name) as sender_name,
+        SUM(CASE WHEN unread = 1 AND from_me = 0 THEN 1 ELSE 0 END) as unread_count
+      FROM messages
+      GROUP BY sender_id
+      ORDER BY last_timestamp DESC
+      LIMIT ?
+    `;
+    return this.allQuery(query, [limit]);
+  }
+
   // Helper method to convert database row to message object
   dbRowToMessage(row) {
     const rawMessage = JSON.parse(row.raw_message || '{}');
