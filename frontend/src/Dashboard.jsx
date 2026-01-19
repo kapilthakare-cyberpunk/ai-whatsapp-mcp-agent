@@ -82,8 +82,8 @@ export default function Dashboard() {
   const fetchMessages = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_URL}/monitored-messages?limit=100`); // Fetch more to build better threads
-      let allMessages = res.data.messages.filter(m => m.type === 'text'); // Include both sent and received messages
+      const res = await axios.get(`${API_URL}/unread?limit=200`);
+      let allMessages = res.data.messages.filter(m => m.type === 'text');
 
       // Grouping Logic
       const grouped = {};
@@ -108,7 +108,7 @@ export default function Dashboard() {
         }
 
         grouped[jid].messages.push(msg);
-        if (msg.unread && !msg.fromMe) grouped[jid].unreadCount++; // Only count incoming messages as unread
+        if (!msg.fromMe) grouped[jid].unreadCount++; // Only count incoming messages as unread
         if (msg.priority === 'high' && !msg.fromMe) grouped[jid].hasUrgent = true; // Only mark incoming as urgent
         if (msg.fromMe) grouped[jid].hasSentMessages = true; // Track sent messages
         if (msg.timestamp > grouped[jid].lastTimestamp) grouped[jid].lastTimestamp = msg.timestamp;
@@ -120,7 +120,7 @@ export default function Dashboard() {
       });
 
       // Convert to array
-      const threadArray = Object.values(grouped);
+      const threadArray = Object.values(grouped).filter(t => t.unreadCount > 0);
 
       // Sort messages within threads
       threadArray.forEach(t => {
