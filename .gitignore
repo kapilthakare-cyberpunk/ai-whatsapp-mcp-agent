@@ -16,6 +16,7 @@ baileys_store_multi/
 *.session
 *.creds
 qr-code.png
+telegram_service/telegram.session-journal
 
 # =============================================
 # Node.js & Dependencies
@@ -45,6 +46,8 @@ logs/
 *.sqlite
 *.sqlite3
 whatsapp_data.db
+whatsapp_data.db-shm
+whatsapp_data.db-wal
 
 # =============================================
 # Memory & Monitoring JSON Files
@@ -191,6 +194,9 @@ Temporary Items
 frontend/dist/
 frontend/build/
 frontend/node_modules/
+
+# Local process configs
+ecosystem.config.cjs
 
 # Backend specific
 src/**/*.js.map
