@@ -48,8 +48,8 @@ export default function TelegramDashboard() {
   const fetchMessages = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/telegram/messages`, {
-        params: { chatLimit: 100, messagesPerChat: 35, delayMs: 200 }
+      const res = await axios.get(`${API_URL}/telegram/unread`, {
+        params: { limit: 200, dialog_limit: 50, messages_per_chat: 50 }
       });
       const allMessages = res.data.messages || [];
       const grouped = {};
@@ -69,11 +69,13 @@ export default function TelegramDashboard() {
           };
         }
         grouped[jid].messages.push(msg);
-        if (msg.unread && !msg.fromMe) grouped[jid].unreadCount += 1;
+        if (!msg.fromMe) grouped[jid].unreadCount += 1;
         if (msg.timestamp > grouped[jid].lastTimestamp) grouped[jid].lastTimestamp = msg.timestamp;
       });
 
-      const threadList = Object.values(grouped).sort((a, b) => b.lastTimestamp - a.lastTimestamp);
+      const threadList = Object.values(grouped)
+        .filter(thread => thread.unreadCount > 0)
+        .sort((a, b) => b.lastTimestamp - a.lastTimestamp);
       setThreads(threadList);
       setFilteredThreads(threadList);
 

@@ -617,7 +617,12 @@ app.get('/telegram/status', (req, res) => {
 app.get('/telegram/unread', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
-    const result = await telegramRequest('get', '/unread', { params: { limit } });
+    const dialogLimit = parseInt(req.query.dialog_limit) || undefined;
+    const messagesPerChat = parseInt(req.query.messages_per_chat) || undefined;
+    const params = { limit };
+    if (Number.isFinite(dialogLimit)) params.dialog_limit = dialogLimit;
+    if (Number.isFinite(messagesPerChat)) params.messages_per_chat = messagesPerChat;
+    const result = await telegramRequest('get', '/unread', { params });
     const messages = result.messages || [];
     res.status(200).json({
       status: 'success',
