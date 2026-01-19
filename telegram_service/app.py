@@ -241,11 +241,17 @@ async def list_unread(limit: int = 50, dialog_limit: int = 50, messages_per_chat
         except Exception as exc:
             print(f"Failed to fetch unread messages for dialog {dialog.entity.id}: {exc}")
             continue
-        for msg in messages:
-            if is_unread(msg):
+        if min_id:
+            for msg in messages:
                 results.append(normalize_message(dialog, msg))
-            if len(results) >= limit:
-                return {"status": "success", "messages": results, "count": len(results)}
+                if len(results) >= limit:
+                    return {"status": "success", "messages": results, "count": len(results)}
+        else:
+            for msg in messages:
+                if is_unread(msg):
+                    results.append(normalize_message(dialog, msg))
+                if len(results) >= limit:
+                    return {"status": "success", "messages": results, "count": len(results)}
     return {"status": "success", "messages": results, "count": len(results)}
 
 
