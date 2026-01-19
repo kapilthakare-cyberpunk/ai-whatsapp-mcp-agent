@@ -225,7 +225,7 @@ async def list_unread(limit: int = 50, dialog_limit: int = 50, messages_per_chat
         if unread_count == 0:
             continue
         try:
-            min_id = getattr(dialog.entity, "read_inbox_max_id", None)
+            min_id = getattr(getattr(dialog, "dialog", None), "read_inbox_max_id", None)
             if min_id:
                 messages = await safe_get_messages(
                     telegram,
