@@ -5,7 +5,7 @@ from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from telethon import TelegramClient
-from telethon.errors import SessionPasswordNeededError
+from telethon.errors import FloodWaitError, RPCError, SessionPasswordNeededError
 
 
 API_ID = os.getenv("TELEGRAM_API_ID")
@@ -53,6 +53,28 @@ async def get_client() -> TelegramClient:
         elif not client.is_connected():
             await client.connect()
     return client
+
+
+async def require_authorized(telegram: TelegramClient) -> None:
+    authorized = await telegram.is_user_authorized()
+    if not authorized:
+        raise HTTPException(status_code=401, detail="Telegram not authorized")
+
+
+async def safe_get_messages(telegram: TelegramClient, entity, limit: int):
+    for attempt in range(3):
+        try:
+            return await telegram.get_messages(entity, limit=limit)
+        except FloodWaitError as exc:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Telegram rate limited. Retry after {exc.seconds}s"
+            ) from exc
+        except (RPCError, ValueError) as exc:
+            if attempt < 2 and "Request was unsuccessful" in str(exc):
+                await asyncio.sleep(0.5 * (attempt + 1))
+                continue
+            raise
 
 
 def normalize_message(dialog, message):
@@ -140,6 +162,7 @@ async def login_confirm(payload: LoginConfirm):
 @app.get("/chats")
 async def list_chats(limit: int = 50):
     telegram = await get_client()
+    await require_authorized(telegram)
     dialogs = await telegram.get_dialogs(limit=limit)
     return {
         "status": "success",
@@ -160,10 +183,17 @@ async def list_chats(limit: int = 50):
 @app.get("/messages")
 async def list_messages(chat_limit: int = 100, messages_per_chat: int = 35, delay_ms: int = 200):
     telegram = await get_client()
+    await require_authorized(telegram)
     dialogs = await telegram.get_dialogs(limit=chat_limit)
     results = []
     for dialog in dialogs:
-        messages = await telegram.get_messages(dialog.entity, limit=messages_per_chat)
+        try:
+            messages = await safe_get_messages(telegram, dialog.entity, limit=messages_per_chat)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            print(f"Failed to fetch messages for dialog {dialog.entity.id}: {exc}")
+            continue
         results.extend([normalize_message(dialog, msg) for msg in messages])
         if delay_ms > 0:
             await asyncio.sleep(delay_ms / 1000.0)
@@ -173,10 +203,17 @@ async def list_messages(chat_limit: int = 100, messages_per_chat: int = 35, dela
 @app.get("/unread")
 async def list_unread(limit: int = 50, dialog_limit: int = 50, messages_per_chat: int = 10):
     telegram = await get_client()
+    await require_authorized(telegram)
     dialogs = await telegram.get_dialogs(limit=dialog_limit)
     results = []
     for dialog in dialogs:
-        messages = await telegram.get_messages(dialog.entity, limit=messages_per_chat)
+        try:
+            messages = await safe_get_messages(telegram, dialog.entity, limit=messages_per_chat)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            print(f"Failed to fetch unread messages for dialog {dialog.entity.id}: {exc}")
+            continue
         for msg in messages:
             if is_unread(msg):
                 results.append(normalize_message(dialog, msg))
@@ -188,8 +225,9 @@ async def list_unread(limit: int = 50, dialog_limit: int = 50, messages_per_chat
 @app.get("/history/{chat_id}")
 async def history(chat_id: str, limit: int = 50):
     telegram = await get_client()
+    await require_authorized(telegram)
     entity = await telegram.get_entity(int(chat_id))
-    messages = await telegram.get_messages(entity, limit=limit)
+    messages = await safe_get_messages(telegram, entity, limit=limit)
     dialog = await telegram.get_dialogs(limit=1, search=chat_id)
     dialog_info = dialog[0] if dialog else None
     if dialog_info is None:
