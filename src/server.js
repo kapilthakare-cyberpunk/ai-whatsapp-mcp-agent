@@ -16,6 +16,7 @@ const qrcode = require('qrcode-terminal');
 dotenv.config();
 
 const app = express();
+const HOST = config.host;
 const PORT = config.port;
 
 // Initialize Baileys WhatsApp Client, Template Store, and Task Manager
@@ -1586,7 +1587,7 @@ app.get('/health', (req, res) => {
 // Initialize Baileys client before starting the server
 initializeBaileys().then(() => {
   // Start the server
-  const server = app.listen(PORT, () => {
+  const server = app.listen(PORT, HOST, () => {
     console.log(`WhatsApp MCP Server is running on port ${PORT}`);
     console.log(`QR endpoint: GET http://localhost:${PORT}/qr`);
     console.log(`Status endpoint: GET http://localhost:${PORT}/status`);
