@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ArrowLeft, RefreshCw, Sparkles, Clock, AlertTriangle, CheckCircle, MessageSquare, Check } from 'lucide-react';
-
-const API_URL = 'http://localhost:3000';
+import { API_URL } from './api/client';
 
 export default function BriefingPage() {
   const navigate = useNavigate();
@@ -112,6 +111,7 @@ export default function BriefingPage() {
               <button
                 onClick={() => navigate('/dashboard')}
                 className="text-gray-600 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-lg"
+                aria-label="Back to dashboard"
               >
                 <ArrowLeft size={20} />
               </button>

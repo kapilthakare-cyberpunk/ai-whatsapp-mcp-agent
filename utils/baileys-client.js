@@ -25,6 +25,7 @@ class BaileysWhatsAppClient {
       messagesPerChat: 35,
       delayMs: 250
     };
+    this.messageCallback = null;
   }
 
   normalizeTimestamp(value) {
@@ -50,14 +51,20 @@ class BaileysWhatsAppClient {
     this.taskManager = taskManager;
   }
 
+  setMessageCallback(callback) {
+    this.messageCallback = callback;
+  }
+
   async initialize() {
     try {
       // Initialize the SQLite database
       await this.db.initialize();
 
-      const autoBackfillFlag = process.env.AUTO_BACKFILL_ON_STARTUP !== 'false';
+      const autoBackfillSetting = process.env.AUTO_BACKFILL_ON_STARTUP || 'true';
+      const autoBackfillFlag = autoBackfillSetting !== 'false';
+      const forceBackfill = autoBackfillSetting === 'force';
       const totalMessages = await this.db.getTotalMessagesCount();
-      this.autoBackfillEnabled = autoBackfillFlag && totalMessages === 0;
+      this.autoBackfillEnabled = forceBackfill || (autoBackfillFlag && totalMessages === 0);
       
       // Initialize auth state separately
       const { state, saveCreds } = await useMultiFileAuthState('./baileys_store_multi');
@@ -307,7 +314,8 @@ class BaileysWhatsAppClient {
           );
 
           // AUTO TASK DETECTION - Process text messages for tasks
-          if (this.taskManager && !message.key.fromMe) {
+          const detectionMode = process.env.TASK_DETECTION_MODE || 'server';
+          if (detectionMode !== 'server' && this.taskManager && !message.key.fromMe) {
             try {
               console.log(`📍 Auto-detecting tasks from message: "${content.text.substring(0, 50)}..."`);
               
@@ -359,6 +367,14 @@ class BaileysWhatsAppClient {
         };
 
         await this.db.addMonitoredMessage(monitoringData);
+
+        if (typeof this.messageCallback === 'function') {
+          try {
+            this.messageCallback(monitoringData);
+          } catch (callbackError) {
+            console.error('Message callback error:', callbackError);
+          }
+        }
 
         // Emit MCP event for the message
         await this.emitMCPEvent({
@@ -677,7 +693,7 @@ class BaileysWhatsAppClient {
     }
   }
 
-  async markAsRead(messageIds) {
+  async markMessagesAsRead(messageIds) {
     try {
       return await this.db.markAsRead(messageIds);
     } catch (error) {
@@ -896,7 +912,7 @@ class BaileysWhatsAppClient {
     }
   }
 
-  async markAsRead(contact, all = true) {
+  async markContactAsRead(contact, all = true) {
     try {
       if (!this.sock) throw new Error('Not connected');
       const messages = await this.db.getMonitoredMessages(1000, 0);
@@ -911,6 +927,16 @@ class BaileysWhatsAppClient {
       return { status: 'success', count: contactMessages.length };
     } catch (error) {
       console.error('Error marking as read:', error);
+      throw error;
+    }
+  }
+
+  async dismissThread(threadId) {
+    try {
+      await this.db.dismissThread(threadId);
+      return { status: 'success' };
+    } catch (error) {
+      console.error('Error dismissing thread:', error);
       throw error;
     }
   }

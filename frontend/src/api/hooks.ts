@@ -39,3 +39,15 @@ export function useGenerateDraft() {
     },
   });
 }
+
+export function useMarkRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { messageIds?: string[]; threadId?: string }) => {
+      return (await api.post('/mark-read', payload)).data;
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['monitored-messages'] });
+    },
+  });
+}

@@ -4,6 +4,7 @@ const cors = require('cors');
 const axios = require('axios');
 const crypto = require('crypto');
 const dotenv = require('dotenv');
+const { EventEmitter } = require('events');
 const BaileysWhatsAppClient = require('../utils/baileys-client');
 const { generateDraft, generateBriefing } = require('../utils/draft-generator');
 const TemplateStore = require('../utils/template-store');
@@ -22,14 +23,215 @@ const baileysClient = new BaileysWhatsAppClient();
 const templateStore = new TemplateStore();
 const taskManager = new TaskManager();
 const TELEGRAM_SERVICE_URL = process.env.TELEGRAM_SERVICE_URL || 'http://localhost:8088';
+const eventBus = new EventEmitter();
+const sseClients = new Set();
+const taskQueue = new Map();
+const processedMessages = new Map();
+const MAX_PROCESSED_MESSAGES = 5000;
+const TASK_DETECTION_DELAY_MS = 3000;
+const TODOIST_AUTO_ADD = process.env.TODOIST_AUTO_ADD === 'true';
+const todoistIdempotency = new Set();
+const TELEGRAM_POLL_INTERVAL_MS = Number(process.env.TELEGRAM_POLL_INTERVAL_MS || 15000);
+const telegramSeen = new Set();
+const TELEGRAM_SEEN_LIMIT = 5000;
+let lastTelegramUnreadCount = null;
+const WHATSAPP_UNREAD_POLL_INTERVAL_MS = Number(process.env.WHATSAPP_UNREAD_POLL_INTERVAL_MS || 15000);
+let unreadCountsTimer = null;
+let lastUnreadCountsHash = null;
+
+function broadcastEvent(event, payload) {
+  const data = JSON.stringify({ event, payload, timestamp: Date.now() });
+  for (const res of sseClients) {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${data}\n\n`);
+  }
+}
+
+function markProcessed(messageId) {
+  processedMessages.set(messageId, Date.now());
+  if (processedMessages.size <= MAX_PROCESSED_MESSAGES) return;
+  const oldest = processedMessages.keys().next().value;
+  if (oldest) processedMessages.delete(oldest);
+}
+
+async function handleTaskDetection(message) {
+  const threadId = message.senderId;
+  const messageId = message.id || message.messageId;
+  if (!threadId || !messageId) return;
+  if (processedMessages.has(messageId)) return;
+
+  try {
+    const context = await baileysClient.getConversationContext(threadId, 5);
+    const senderName = message.senderName || 'Unknown';
+    const result = await taskManager.detectTasks(message.content.text, context, senderName);
+
+    if (result?.hasTasks && result.tasks?.length) {
+      result.tasks.forEach((task) => {
+        baileysClient.db?.addDetectedTask?.({
+          messageId,
+          senderId: threadId,
+          senderName,
+          task,
+          detectedAt: Date.now()
+        });
+      });
+      broadcastEvent('whatsapp.tasks', { threadId, senderName, tasks: result.tasks });
+
+      if (TODOIST_AUTO_ADD) {
+        for (const task of result.tasks) {
+          const key = `${messageId}:${task.task}`;
+          if (todoistIdempotency.has(key)) continue;
+          todoistIdempotency.add(key);
+          try {
+            await taskManager.addToTodoist(task);
+          } catch (todoistError) {
+            console.error('Todoist add error:', todoistError.message);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Task detection error:', error);
+  } finally {
+    markProcessed(messageId);
+  }
+}
+
+function scheduleTaskDetection(message) {
+  if (!taskManager) return;
+  if (message.fromMe) return;
+  if (message.type !== 'text' || !message.content?.text) return;
+
+  const threadId = message.senderId;
+  if (!threadId) return;
+
+  const existing = taskQueue.get(threadId);
+  if (existing?.timer) clearTimeout(existing.timer);
+
+  const timer = setTimeout(() => {
+    taskQueue.delete(threadId);
+    handleTaskDetection(message);
+  }, TASK_DETECTION_DELAY_MS);
+
+  taskQueue.set(threadId, { timer, message });
+}
+
+async function broadcastWhatsAppUnreadCounts() {
+  try {
+    const rows = await baileysClient.db.getUnreadCountsByThread(200);
+    const threads = rows.map((row) => ({
+      threadId: row.threadId,
+      unreadCount: row.unreadCount,
+      lastTimestamp: row.lastTimestamp
+    }));
+    const hash = JSON.stringify(threads);
+    if (hash === lastUnreadCountsHash) return;
+    lastUnreadCountsHash = hash;
+    broadcastEvent('whatsapp.unread_counts', { threads });
+  } catch (error) {
+    // avoid log spam if DB is busy
+  }
+}
+
+function scheduleWhatsAppUnreadCounts() {
+  if (unreadCountsTimer) return;
+  unreadCountsTimer = setTimeout(() => {
+    unreadCountsTimer = null;
+    broadcastWhatsAppUnreadCounts();
+  }, 1000);
+}
+
+async function pollTelegramUnread() {
+  try {
+    const res = await axios.get(`${TELEGRAM_SERVICE_URL}/unread`, {
+      params: { limit: 50, dialog_limit: 100, messages_per_chat: 20 },
+      timeout: 5000
+    });
+
+    if (res?.data?.status !== 'success') return;
+    const { messages = [], count = 0 } = res.data;
+
+    if (lastTelegramUnreadCount !== count) {
+      lastTelegramUnreadCount = count;
+      broadcastEvent('telegram.unread_count', { count });
+    }
+
+    for (const msg of messages) {
+      const msgId = msg.id || msg.messageId;
+      if (!msgId) continue;
+      if (telegramSeen.has(msgId)) continue;
+      telegramSeen.add(msgId);
+      if (telegramSeen.size > TELEGRAM_SEEN_LIMIT) {
+        const oldest = telegramSeen.keys().next().value;
+        if (oldest) telegramSeen.delete(oldest);
+      }
+      broadcastEvent('telegram.message', msg);
+    }
+  } catch (error) {
+    // keep quiet to avoid log spam if telegram service is down
+  }
+}
+
+function startTelegramPolling() {
+  if (!Number.isFinite(TELEGRAM_POLL_INTERVAL_MS) || TELEGRAM_POLL_INTERVAL_MS <= 0) {
+    return;
+  }
+  setInterval(pollTelegramUnread, TELEGRAM_POLL_INTERVAL_MS);
+  pollTelegramUnread();
+}
+
+function startWhatsAppUnreadPolling() {
+  if (!Number.isFinite(WHATSAPP_UNREAD_POLL_INTERVAL_MS) || WHATSAPP_UNREAD_POLL_INTERVAL_MS <= 0) {
+    return;
+  }
+  setInterval(broadcastWhatsAppUnreadCounts, WHATSAPP_UNREAD_POLL_INTERVAL_MS);
+  broadcastWhatsAppUnreadCounts();
+}
 
 // Wire TaskManager into BaileysClient for auto task detection
 baileysClient.setTaskManager(taskManager);
+baileysClient.setMessageCallback((message) => {
+  eventBus.emit('whatsapp.message', message);
+  broadcastEvent('whatsapp.message', message);
+  scheduleTaskDetection(message);
+  scheduleWhatsAppUnreadCounts();
+});
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// Server-sent events for real-time updates
+app.get('/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  sseClients.add(res);
+  res.write('event: ready\n');
+  res.write(`data: ${JSON.stringify({ status: 'ok', timestamp: Date.now() })}\n\n`);
+  (async () => {
+    try {
+      const threads = await baileysClient.db.getUnreadCountsByThread(200);
+      res.write('event: whatsapp.unread_counts\n');
+      res.write(`data: ${JSON.stringify({ threads })}\n\n`);
+    } catch (error) {
+      // ignore snapshot failures
+    }
+  })();
+
+  const keepAlive = setInterval(() => {
+    res.write('event: ping\n');
+    res.write(`data: ${Date.now()}\n\n`);
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    sseClients.delete(res);
+  });
+});
 
 // Endpoint to get QR code for WhatsApp Web authentication
 app.get('/qr', async (req, res) => {
@@ -58,6 +260,29 @@ app.get('/qr', async (req, res) => {
       qrcode.generate(qrCode, { small: true });
       console.log('-----------------------------------');
       console.log('QR code also returned in the response for programmatic access.');
+
+      const wantsJson =
+        req.query.format === 'json' ||
+        (req.headers.accept || '').includes('application/json');
+      const isCurl = (req.headers['user-agent'] || '').toLowerCase().includes('curl');
+
+      if (isCurl && !wantsJson) {
+        qrcode.generate(qrCode, { small: true }, (code) => {
+          res
+            .status(200)
+            .type('text/plain')
+            .send(
+              [
+                'Scan this QR code with your WhatsApp:',
+                '-----------------------------------',
+                code.trimEnd(),
+                '-----------------------------------',
+                'Tip: add ?format=json for the raw QR string.'
+              ].join('\n')
+            );
+        });
+        return;
+      }
 
       res.status(200).json({
         status: 'success',
@@ -330,6 +555,22 @@ app.get('/unread', async (req, res) => {
   }
 });
 
+// Endpoint to get unread counts per thread
+app.get('/unread-counts', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const threads = await baileysClient.db.getUnreadCountsByThread(limit);
+    res.status(200).json({
+      status: 'success',
+      count: threads.length,
+      threads
+    });
+  } catch (error) {
+    console.error('Error getting unread counts:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 // Backfill recent messages across chats
 app.post('/backfill', async (req, res) => {
   try {
@@ -579,12 +820,16 @@ app.get('/telegram/briefing', async (req, res) => {
 // Endpoint to mark messages as read
 app.post('/mark-read', async (req, res) => {
   try {
-    const { messageIds } = req.body;
+    const { messageIds, contact, threadId, all = true } = req.body;
 
-    if (!messageIds || (Array.isArray(messageIds) && messageIds.length === 0)) {
+    if (
+      (!messageIds || (Array.isArray(messageIds) && messageIds.length === 0)) &&
+      !contact &&
+      !threadId
+    ) {
       return res.status(400).json({
         status: 'error',
-        message: 'Missing "messageIds" in request body'
+        message: 'Missing "messageIds", "contact", or "threadId" in request body'
       });
     }
 
@@ -595,10 +840,24 @@ app.post('/mark-read', async (req, res) => {
       });
     }
 
-    const count = await baileysClient.markAsRead(messageIds);
+    let count = 0;
+    if (messageIds && (!Array.isArray(messageIds) || messageIds.length > 0)) {
+      count = await baileysClient.markMessagesAsRead(messageIds);
+    } else if (contact) {
+      const result = await baileysClient.markContactAsRead(contact, all);
+      count = result?.count || 0;
+    }
+
+    if (threadId) {
+      await baileysClient.dismissThread(threadId);
+    }
+
+    scheduleWhatsAppUnreadCounts();
+
     res.status(200).json({
       status: 'success',
       count,
+      dismissed: Boolean(threadId),
       message: `${count} messages marked as read`
     });
   } catch (error) {
@@ -1279,25 +1538,6 @@ app.get('/contacts', async (req, res) => {
   }
 });
 
-// Mark messages as read from a contact
-app.post('/mark-read', async (req, res) => {
-  try {
-    const { contact, all = true } = req.body;
-    if (!contact) {
-      return res.status(400).json({ status: 'error', message: 'Contact name required' });
-    }
-    
-    await baileysClient.markAsRead(contact, all);
-    res.status(200).json({
-      status: 'success',
-      message: `Marked messages from ${contact} as read`
-    });
-  } catch (error) {
-    console.error('Error marking messages as read:', error);
-    res.status(500).json({ status: 'error', message: error.message });
-  }
-});
-
 // Get chat preview
 app.get('/chats', async (req, res) => {
   try {
@@ -1355,6 +1595,9 @@ initializeBaileys().then(() => {
     console.log(`Advanced endpoints available at /search, /history, /contacts, /chats, /create-group`);
     console.log(`Telegram endpoints available at /telegram/status, /telegram/unread, /telegram/send, /telegram/briefing`);
   });
+
+  startTelegramPolling();
+  startWhatsAppUnreadPolling();
 });
 
 module.exports = app;

@@ -1,0 +1,12 @@
+{
+  "watch": ["src"],
+  "ext": "js,mjs,cjs,json",
+  "ignore": [
+    "baileys_store_multi/**",
+    "whatsapp_data.db",
+    "logs/**",
+    ".wwebjs_auth/**",
+    ".wwebjs_cache/**"
+  ],
+  "exec": "node src/server.js"
+}

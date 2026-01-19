@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Toaster, toast } from 'sonner';
-import { useGenerateDraft, useMonitoredMessages, useSendMessage, useStatus } from './api/hooks';
+import { useQueryClient } from '@tanstack/react-query';
+import { API_URL } from './api/client';
+import { useGenerateDraft, useMarkRead, useMonitoredMessages, useSendMessage, useStatus } from './api/hooks';
 import type { Tone } from './api/schemas';
 
 type MonitoredMessage = {
@@ -30,15 +32,63 @@ type Thread = {
 
 export default function Dashboard() {
   const { data: status } = useStatus();
-  const { data, isLoading, error } = useMonitoredMessages(200);
+  const limit = 200;
+  const { data, isLoading, error } = useMonitoredMessages(limit);
   const generateDraft = useGenerateDraft();
   const sendMessage = useSendMessage();
+  const markRead = useMarkRead();
+  const qc = useQueryClient();
 
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { text: string; tone: Tone } | null>>({});
   const [editingDraft, setEditingDraft] = useState<{ msgId: string; text: string } | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
   const messages: MonitoredMessage[] = (data?.messages || []).filter((m: any) => m.type === 'text');
+
+  useEffect(() => {
+    const source = new EventSource(`${API_URL}/events`);
+
+    const onUnreadCounts = (event: MessageEvent) => {
+      try {
+        const payload = JSON.parse(event.data);
+        const threads = payload?.threads || [];
+        const next: Record<string, number> = {};
+        for (const thread of threads) {
+          if (thread?.threadId) next[thread.threadId] = thread.unreadCount || 0;
+        }
+        setUnreadCounts(next);
+      } catch (e) {
+        // ignore parse errors
+      }
+    };
+
+    const onMessage = (event: MessageEvent) => {
+      try {
+        const payload = JSON.parse(event.data);
+        const message = payload?.payload || payload;
+        if (!message?.id) return;
+
+        qc.setQueryData(['monitored-messages', limit], (old: any) => {
+          if (!old?.messages) return old;
+          if (old.messages.some((m: any) => m.id === message.id)) return old;
+          const nextMessages = [message, ...old.messages].slice(0, limit);
+          return { ...old, messages: nextMessages, count: nextMessages.length };
+        });
+      } catch (e) {
+        // ignore parse errors
+      }
+    };
+
+    source.addEventListener('whatsapp.unread_counts', onUnreadCounts);
+    source.addEventListener('whatsapp.message', onMessage);
+
+    return () => {
+      source.removeEventListener('whatsapp.unread_counts', onUnreadCounts);
+      source.removeEventListener('whatsapp.message', onMessage);
+      source.close();
+    };
+  }, [limit, qc]);
 
   const threads = useMemo(() => {
     const grouped: Record<string, Thread> = {};
@@ -68,6 +118,9 @@ export default function Dashboard() {
     }
 
     const arr = Object.values(grouped);
+    for (const t of arr) {
+      if (typeof unreadCounts[t.id] === 'number') t.unreadCount = unreadCounts[t.id];
+    }
     for (const t of arr) t.messages.sort((a, b) => a.timestamp - b.timestamp);
     arr.sort((a, b) => {
       if (a.hasUrgent && !b.hasUrgent) return -1;
@@ -115,6 +168,17 @@ export default function Dashboard() {
     }
   };
 
+  const onMarkRead = async (thread: Thread) => {
+    const messageIds = thread.messages.map((m) => m.id).filter(Boolean);
+    try {
+      await markRead.mutateAsync({ messageIds, threadId: thread.id });
+      toast.success('Marked as read');
+      if (selectedThreadId === thread.id) setSelectedThreadId(null);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to mark as read');
+    }
+  };
+
   if (error) {
     return <div style={{ padding: 16 }}>Error loading messages.</div>;
   }
@@ -126,7 +190,7 @@ export default function Dashboard() {
       <div style={{ width: 360, borderRight: '1px solid #eee', padding: 12, overflow: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
-            <div style={{ fontWeight: 700 }}>WhatsApp Dashboard</div>
+            <h1 style={{ fontWeight: 700, margin: 0 }}>WhatsApp Dashboard</h1>
             <div style={{ fontSize: 12, color: '#666' }}>
               Status: {status?.connected ? 'Connected' : status?.status || 'Unknown'}
             </div>
@@ -138,38 +202,78 @@ export default function Dashboard() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {threads.map((t) => (
-              <button
+              <div
                 key={t.id}
-                onClick={() => setSelectedThreadId(t.id)}
                 style={{
-                  textAlign: 'left',
                   border: '1px solid #eee',
                   background: selectedThreadId === t.id ? '#f3f4f6' : 'white',
                   padding: 10,
                   borderRadius: 10,
-                  cursor: 'pointer',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <div style={{ fontWeight: 600 }}>{t.name}</div>
-                  {t.unreadCount > 0 && (
-                    <div
-                      style={{
-                        fontSize: 12,
-                        background: '#2563eb',
-                        color: 'white',
-                        padding: '2px 8px',
-                        borderRadius: 999,
-                      }}
-                    >
-                      {t.unreadCount}
-                    </div>
-                  )}
+                  <button
+                    onClick={() => setSelectedThreadId(t.id)}
+                    style={{
+                      textAlign: 'left',
+                      background: 'transparent',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
+                      flex: 1,
+                    }}
+                  >
+                    <div style={{ fontWeight: 600 }}>{t.name}</div>
+                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {t.unreadCount > 0 && (
+                      <div
+                        style={{
+                          fontSize: 12,
+                          background: '#2563eb',
+                          color: 'white',
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                        }}
+                      >
+                        {t.unreadCount}
+                      </div>
+                    )}
+                    {t.unreadCount > 0 && (
+                      <button
+                        onClick={() => onMarkRead(t)}
+                        disabled={markRead.isPending}
+                        style={{
+                          fontSize: 12,
+                          background: '#10b981',
+                          color: 'white',
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Read
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                  {t.messages[t.messages.length - 1]?.content?.text?.slice(0, 80) || ''}
-                </div>
-              </button>
+                <button
+                  onClick={() => setSelectedThreadId(t.id)}
+                  style={{
+                    textAlign: 'left',
+                    background: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    width: '100%',
+                  }}
+                >
+                  <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                    {t.messages[t.messages.length - 1]?.content?.text?.slice(0, 80) || ''}
+                  </div>
+                </button>
+              </div>
             ))}
           </div>
         )}

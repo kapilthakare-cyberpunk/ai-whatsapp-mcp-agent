@@ -56,6 +56,11 @@ async def get_client() -> TelegramClient:
 
 
 def normalize_message(dialog, message):
+    unread_attr = getattr(message, "unread", None)
+    if unread_attr is None:
+        is_read_attr = getattr(message, "is_read", None)
+        unread_attr = False if is_read_attr is None else not is_read_attr
+
     chat_id = str(dialog.entity.id)
     name = dialog.name or chat_id
     timestamp_ms = int(message.date.timestamp() * 1000) if message.date else 0
@@ -71,12 +76,22 @@ def normalize_message(dialog, message):
         "timestamp": timestamp_ms,
         "isGroupMessage": is_group,
         "fromMe": bool(message.out),
-        "unread": bool(message.unread),
+        "unread": bool(unread_attr),
         "priority": "normal",
         "groupId": chat_id if is_group else None,
         "groupName": name if is_group else None,
         "messageId": str(message.id),
     }
+
+
+def is_unread(message) -> bool:
+    unread_attr = getattr(message, "unread", None)
+    if unread_attr is not None:
+        return bool(unread_attr)
+    is_read_attr = getattr(message, "is_read", None)
+    if is_read_attr is None:
+        return False
+    return not is_read_attr
 
 
 @app.on_event("startup")
@@ -156,14 +171,14 @@ async def list_messages(chat_limit: int = 100, messages_per_chat: int = 35, dela
 
 
 @app.get("/unread")
-async def list_unread(limit: int = 50):
+async def list_unread(limit: int = 50, dialog_limit: int = 50, messages_per_chat: int = 10):
     telegram = await get_client()
-    dialogs = await telegram.get_dialogs(limit=100)
+    dialogs = await telegram.get_dialogs(limit=dialog_limit)
     results = []
     for dialog in dialogs:
-        messages = await telegram.get_messages(dialog.entity, limit=10)
+        messages = await telegram.get_messages(dialog.entity, limit=messages_per_chat)
         for msg in messages:
-            if msg.unread:
+            if is_unread(msg):
                 results.append(normalize_message(dialog, msg))
             if len(results) >= limit:
                 return {"status": "success", "messages": results, "count": len(results)}

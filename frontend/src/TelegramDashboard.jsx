@@ -300,15 +300,25 @@ export default function TelegramDashboard() {
           <div className="flex items-center gap-4">
             <input
               type="text"
-              placeholder="Search..."
+              placeholder="Search…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search threads"
               className="px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none w-40 md:w-64"
             />
-            <button onClick={generateBriefing} disabled={generatingBriefing} className="p-2 rounded-full hover:bg-blue-50 text-blue-600">
+            <button
+              onClick={generateBriefing}
+              disabled={generatingBriefing}
+              className="p-2 rounded-full hover:bg-blue-50 text-blue-600"
+              aria-label="Generate briefing"
+            >
               {generatingBriefing ? <RefreshCw className="animate-spin w-5 h-5"/> : '📋'}
             </button>
-            <button onClick={() => setAudioEnabled(!audioEnabled)} className="text-xl" title="Toggle Sound">
+            <button
+              onClick={() => setAudioEnabled(!audioEnabled)}
+              className="text-xl"
+              aria-label={audioEnabled ? 'Disable sound' : 'Enable sound'}
+            >
               {audioEnabled ? '🔔' : '🔇'}
             </button>
             {filteredThreads.length > 0 && (
@@ -326,7 +336,7 @@ export default function TelegramDashboard() {
                 <span className="hidden sm:inline">Mark All Read</span>
               </button>
             )}
-            <button onClick={fetchMessages} className="p-2 rounded-full hover:bg-gray-100">
+            <button onClick={fetchMessages} className="p-2 rounded-full hover:bg-gray-100" aria-label="Refresh threads">
               <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
@@ -348,14 +358,14 @@ export default function TelegramDashboard() {
                     <button
                       onClick={() => toggleThreadSelection(thread.id)}
                       className={`text-xs px-2 py-1 rounded-full ${selectedThreads.has(thread.id) ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}
-                      title="Select thread"
+                      aria-label={selectedThreads.has(thread.id) ? 'Deselect thread' : 'Select thread'}
                     >
                       <CheckSquare className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => openHistory(thread)}
                       className="text-xs px-2 py-1 rounded-full bg-gray-100 hover:bg-gray-200"
-                      title="View History"
+                      aria-label="View history"
                     >
                       <History className="w-4 h-4" />
                     </button>

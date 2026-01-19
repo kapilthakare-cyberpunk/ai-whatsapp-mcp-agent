@@ -40,6 +40,8 @@ class SQLiteDatabase {
           reject(err);
         } else {
           console.log('✅ Connected to SQLite database');
+          this.db.run('PRAGMA journal_mode = WAL');
+          this.db.run('PRAGMA busy_timeout = 5000');
           this.createTables().then(resolve).catch(reject);
         }
       });
@@ -473,6 +475,22 @@ class SQLiteDatabase {
       unreadMessages: unreadMessages.count,
       lastMonitored: new Date().toISOString()
     };
+  }
+
+  async getUnreadCountsByThread(limit = 50) {
+    if (!this.db) return [];
+    const query = `
+      SELECT sender_id as threadId,
+             COUNT(*) as unreadCount,
+             MAX(timestamp) as lastTimestamp
+      FROM messages
+      WHERE unread = 1 AND from_me = 0
+        AND sender_id NOT IN (SELECT thread_id FROM dismissed_threads)
+      GROUP BY sender_id
+      ORDER BY unreadCount DESC, lastTimestamp DESC
+      LIMIT ?
+    `;
+    return await this.allQuery(query, [limit]);
   }
 
   async getTotalMessagesCount() {
