@@ -61,11 +61,17 @@ async def require_authorized(telegram: TelegramClient) -> None:
         raise HTTPException(status_code=401, detail="Telegram not authorized")
 
 
-async def safe_get_messages(telegram: TelegramClient, entity, limit: int, timeout_s: float = 10.0):
+async def safe_get_messages(
+    telegram: TelegramClient,
+    entity,
+    limit: int,
+    timeout_s: float = 10.0,
+    min_id: Optional[int] = None,
+):
     for attempt in range(3):
         try:
             return await asyncio.wait_for(
-                telegram.get_messages(entity, limit=limit),
+                telegram.get_messages(entity, limit=limit, min_id=min_id or 0),
                 timeout=timeout_s,
             )
         except FloodWaitError as exc:
@@ -215,10 +221,21 @@ async def list_unread(limit: int = 50, dialog_limit: int = 50, messages_per_chat
     dialogs = await telegram.get_dialogs(limit=dialog_limit)
     results = []
     for dialog in dialogs:
-        if getattr(dialog, "unread_count", 0) == 0:
+        unread_count = getattr(dialog, "unread_count", 0)
+        if unread_count == 0:
             continue
         try:
-            messages = await safe_get_messages(telegram, dialog.entity, limit=messages_per_chat)
+            min_id = getattr(dialog.entity, "read_inbox_max_id", None)
+            if min_id:
+                messages = await safe_get_messages(
+                    telegram,
+                    dialog.entity,
+                    limit=messages_per_chat,
+                    timeout_s=10.0,
+                    min_id=min_id,
+                )
+            else:
+                messages = await safe_get_messages(telegram, dialog.entity, limit=messages_per_chat)
         except HTTPException:
             raise
         except Exception as exc:
