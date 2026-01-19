@@ -326,6 +326,7 @@ export default function Dashboard() {
                           style={{ width: '100%', minHeight: 100 }}
                           value={editingDraft.text}
                           onChange={(e) => setEditingDraft({ msgId: m.id, text: e.target.value })}
+                          aria-label="Edit draft message"
                         />
                         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                           <button onClick={() => setEditingDraft(null)}>Cancel</button>

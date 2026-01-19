@@ -77,7 +77,7 @@ export default function TemplatesPage() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading templates...</p>
+          <p className="text-gray-600">Loading templates…</p>
         </div>
       </div>
     );
@@ -120,6 +120,7 @@ export default function TemplatesPage() {
               <button
                 onClick={() => navigate('/dashboard')}
                 className="text-gray-600 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-lg"
+                aria-label="Back to dashboard"
               >
                 <ArrowLeft size={20} />
               </button>
@@ -160,9 +161,10 @@ export default function TemplatesPage() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
-                placeholder="Search templates..."
+                placeholder="Search templates…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                aria-label="Search templates"
                 className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -171,6 +173,7 @@ export default function TemplatesPage() {
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
+                aria-label="Filter by category"
                 className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 {categories.map(cat => (
@@ -205,19 +208,19 @@ export default function TemplatesPage() {
                     <button
                       onClick={() => copyToClipboard(template.content)}
                       className="text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-lg"
-                      title="Copy"
+                      aria-label="Copy template"
                     >
                       <Copy size={16} />
                     </button>
                     <button
                       className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-50 rounded-lg"
-                      title="Edit"
+                      aria-label="Edit template"
                     >
                       <Edit size={16} />
                     </button>
                     <button
                       className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg"
-                      title="Delete"
+                      aria-label="Delete template"
                     >
                       <Trash2 size={16} />
                     </button>

@@ -54,7 +54,7 @@ export default function TasksPage() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading tasks...</p>
+          <p className="text-gray-600">Loading tasks…</p>
         </div>
       </div>
     );
@@ -97,6 +97,7 @@ export default function TasksPage() {
               <button
                 onClick={() => navigate('/dashboard')}
                 className="text-gray-600 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-lg"
+                aria-label="Back to dashboard"
               >
                 <ArrowLeft size={20} />
               </button>
@@ -159,7 +160,7 @@ export default function TasksPage() {
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
                     {task.status}
                   </span>
-                  <button className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg">
+                  <button className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg" aria-label="Delete task">
                     <Trash2 size={16} />
                   </button>
                 </div>

@@ -233,7 +233,7 @@ Be specific, actionable, and concise. Format as bullet points.`;
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <RefreshCw className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600 text-lg">Analyzing messages...</p>
+          <p className="text-gray-600 text-lg">Analyzing messages…</p>
           <p className="text-gray-400 text-sm mt-2">This may take a few moments</p>
         </div>
       </div>
@@ -397,7 +397,7 @@ Be specific, actionable, and concise. Format as bullet points.`;
                       ))}
                       {msgs.length > 10 && (
                         <p className="text-sm text-gray-500 text-center pt-2">
-                          ... and {msgs.length - 10} more messages
+                          … and {msgs.length - 10} more messages
                         </p>
                       )}
                     </div>

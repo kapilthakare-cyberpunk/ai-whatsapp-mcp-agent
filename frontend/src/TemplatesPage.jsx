@@ -173,9 +173,12 @@ export default function TemplatesPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search templates..."
+                  placeholder="Search templates…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="Search templates"
+                  name="searchTemplates"
+                  autoComplete="off"
                   className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
@@ -202,7 +205,7 @@ export default function TemplatesPage() {
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto"></div>
-            <p className="text-gray-600 mt-4">Loading templates...</p>
+            <p className="text-gray-600 mt-4">Loading templates…</p>
           </div>
         ) : filteredTemplates.length === 0 ? (
           <div className="bg-white rounded-xl p-12 text-center">
@@ -233,14 +236,14 @@ export default function TemplatesPage() {
                     <button
                       onClick={() => openUseModal(template)}
                       className="p-2 hover:bg-green-50 rounded-lg text-green-600"
-                      title="Use template"
+                      aria-label="Use template"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(template.id)}
                       className="p-2 hover:bg-red-50 rounded-lg text-red-600"
-                      title="Delete"
+                      aria-label="Delete template"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -285,41 +288,53 @@ export default function TemplatesPage() {
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">Create New Template</h2>
-                <button onClick={() => setShowCreateModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  aria-label="Close create template"
+                >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Template Name</label>
+                  <label htmlFor="template-name" className="block text-sm font-medium text-gray-700 mb-1">Template Name</label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="e.g., Property Inquiry Response"
+                    placeholder="e.g., Property Inquiry Response…"
+                    name="templateName"
+                    autoComplete="off"
+                    id="template-name"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Message Text</label>
+                  <label htmlFor="template-text" className="block text-sm font-medium text-gray-700 mb-1">Message Text</label>
                   <textarea
                     value={formData.text}
                     onChange={(e) => setFormData({...formData, text: e.target.value})}
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                     rows={5}
-                    placeholder="Use {{variable}} for dynamic content. E.g., Hi {{name}}, thanks for..."
+                    placeholder="Use {{variable}} for dynamic content. E.g., Hi {{name}}, thanks for…"
+                    name="templateText"
+                    autoComplete="off"
+                    id="template-text"
                   />
                   <p className="text-xs text-gray-500 mt-1">Use {`{{variable}}`} syntax for dynamic content</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                  <label htmlFor="template-category" className="block text-sm font-medium text-gray-700 mb-1">Category</label>
                   <select
                     value={formData.category}
                     onChange={(e) => setFormData({...formData, category: e.target.value})}
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    name="templateCategory"
+                    id="template-category"
                   >
                     {categories.filter(c => c !== 'all').map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
@@ -328,24 +343,30 @@ export default function TemplatesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Shortcuts (comma-separated)</label>
+                  <label htmlFor="template-shortcuts" className="block text-sm font-medium text-gray-700 mb-1">Shortcuts (comma-separated)</label>
                   <input
                     type="text"
                     value={formData.shortcuts}
                     onChange={(e) => setFormData({...formData, shortcuts: e.target.value})}
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="prop, inquiry"
+                    placeholder="prop, inquiry…"
+                    name="templateShortcuts"
+                    autoComplete="off"
+                    id="template-shortcuts"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tags (comma-separated)</label>
+                  <label htmlFor="template-tags" className="block text-sm font-medium text-gray-700 mb-1">Tags (comma-separated)</label>
                   <input
                     type="text"
                     value={formData.tags}
                     onChange={(e) => setFormData({...formData, tags: e.target.value})}
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="real-estate, urgent"
+                    placeholder="real-estate, urgent…"
+                    name="templateTags"
+                    autoComplete="off"
+                    id="template-tags"
                   />
                 </div>
               </div>
@@ -376,7 +397,11 @@ export default function TemplatesPage() {
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">Use Template</h2>
-                <button onClick={() => setShowUseModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <button
+                  onClick={() => setShowUseModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  aria-label="Close use template"
+                >
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -391,13 +416,16 @@ export default function TemplatesPage() {
                   <h4 className="font-medium text-gray-900">Fill in variables:</h4>
                   {selectedTemplate.variables.map(v => (
                     <div key={v}>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{v}</label>
+                      <label htmlFor={`template-var-${v}`} className="block text-sm font-medium text-gray-700 mb-1">{v}</label>
                       <input
                         type="text"
                         value={variables[v] || ''}
                         onChange={(e) => setVariables({...variables, [v]: e.target.value})}
                         className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                        placeholder={`Enter ${v}...`}
+                        placeholder={`Enter ${v}…`}
+                        name={`templateVar-${v}`}
+                        autoComplete="off"
+                        id={`template-var-${v}`}
                       />
                     </div>
                   ))}

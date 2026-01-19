@@ -475,19 +475,28 @@ export default function Dashboard() {
             
             <input 
               type="text" 
-              placeholder="Search..." 
+              placeholder="Search…" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search threads"
+              name="searchThreads"
+              autoComplete="off"
               className="px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none w-40 md:w-64"
             />
 
-            <button onClick={() => setAudioEnabled(!audioEnabled)} className="text-xl" title="Toggle Sound">
+            <button
+              onClick={() => setAudioEnabled(!audioEnabled)}
+              className="text-xl"
+              title="Toggle Sound"
+              aria-label={audioEnabled ? 'Disable sound' : 'Enable sound'}
+            >
               {audioEnabled ? '🔔' : '🔇'}
             </button>
             <button 
-              onClick={() => navigate('/tasks')} 
+              onClick={() => navigate('/tasks')}
               className="p-2 rounded-full hover:bg-orange-50 text-orange-600"
               title="Auto-Detected Tasks"
+              aria-label="Auto-detected tasks"
             >
               <CheckSquare className="w-5 h-5" />
             </button>
@@ -495,6 +504,7 @@ export default function Dashboard() {
               onClick={() => navigate('/templates')} 
               className="p-2 rounded-full hover:bg-purple-50 text-purple-600"
               title="Templates"
+              aria-label="Templates"
             >
               <FileText className="w-5 h-5" />
             </button>
@@ -502,10 +512,16 @@ export default function Dashboard() {
               onClick={() => navigate('/telegram')}
               className="p-2 rounded-full hover:bg-sky-50 text-sky-600"
               title="Telegram Inbox"
+              aria-label="Telegram inbox"
             >
               💬
             </button>
-            <button onClick={generateBriefing} disabled={generatingBriefing} className="p-2 rounded-full hover:bg-blue-50 text-blue-600">
+            <button
+              onClick={generateBriefing}
+              disabled={generatingBriefing}
+              className="p-2 rounded-full hover:bg-blue-50 text-blue-600"
+              aria-label="Generate briefing"
+            >
               {generatingBriefing ? <RefreshCw className="animate-spin w-5 h-5"/> : '📋'}
             </button>
             <button
@@ -513,6 +529,7 @@ export default function Dashboard() {
               disabled={loggingOut}
               className="p-2 rounded-full hover:bg-red-50 text-red-600"
               title="Log out and clear session"
+              aria-label="Log out"
             >
               {loggingOut ? <RefreshCw className="animate-spin w-5 h-5"/> : '⏏️'}
             </button>
@@ -531,7 +548,7 @@ export default function Dashboard() {
                 <span className="hidden sm:inline">Mark All Read</span>
               </button>
             )}
-            <button onClick={fetchMessages} className="p-2 rounded-full hover:bg-gray-100">
+            <button onClick={fetchMessages} className="p-2 rounded-full hover:bg-gray-100" aria-label="Refresh threads">
                <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
@@ -569,6 +586,7 @@ export default function Dashboard() {
                           type="checkbox"
                           checked={selectedThreads.has(thread.id)}
                           onChange={() => toggleThreadSelection(thread.id)}
+                          aria-label={selectedThreads.has(thread.id) ? 'Deselect thread' : 'Select thread'}
                           className="w-4 h-4 text-blue-600 border-2 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 transition-all duration-200"
                         />
                       </div>
@@ -664,6 +682,7 @@ export default function Dashboard() {
                         onClick={() => openHistory(thread)}
                         className="group p-2 rounded-full bg-gray-100 hover:bg-blue-100 text-gray-500 hover:text-blue-600 transition-all duration-200 shadow-sm hover:shadow-md"
                         title="View Full History"
+                        aria-label="View full history"
                       >
                         <History size={16} />
                       </button>
@@ -777,13 +796,22 @@ export default function Dashboard() {
                     <div className="bg-white p-2 rounded-lg border border-blue-200 shadow-inner">
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-xs font-bold text-blue-600 uppercase">Editing Draft</span>
-                        <button onClick={() => setEditingDraft(null)} className="text-gray-400 hover:text-red-500"><X size={14}/></button>
+                        <button
+                          onClick={() => setEditingDraft(null)}
+                          className="text-gray-400 hover:text-red-500"
+                          aria-label="Cancel draft edit"
+                        >
+                          <X size={14}/>
+                        </button>
                       </div>
                       <textarea 
                         className="w-full text-sm p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none mb-2"
                         rows={3}
                         value={editingDraft.text}
                         onChange={(e) => setEditingDraft({...editingDraft, text: e.target.value})}
+                        aria-label="Edit draft message"
+                        name="draftText"
+                        autoComplete="off"
                       />
                       <button 
                         onClick={() => sendDraft(thread.id, editingDraft.text)}
@@ -799,7 +827,9 @@ export default function Dashboard() {
                            <Sparkles size={12} /> 
                            {hasDrafts.tone === 'professional' ? 'Professional Reply' : 'Personal & Warm Reply'}
                          </span>
-                         <button onClick={() => setDrafts({...drafts, [latestMsg.id]: null})}><X size={12}/></button>
+                         <button onClick={() => setDrafts({...drafts, [latestMsg.id]: null})} aria-label="Dismiss draft">
+                           <X size={12}/>
+                         </button>
                        </div>
                        <div className="bg-white border border-blue-100 p-3 rounded-lg shadow-sm">
                          <p className="text-sm text-gray-700 mb-3 leading-relaxed">{hasDrafts.text}</p>
@@ -878,7 +908,9 @@ export default function Dashboard() {
                    <p className="text-xs text-gray-500">{selectedThread.id}</p>
                  </div>
               </div>
-              <button onClick={() => setHistoryModalOpen(false)} className="p-2 hover:bg-gray-200 rounded-full"><X size={20}/></button>
+              <button onClick={() => setHistoryModalOpen(false)} className="p-2 hover:bg-gray-200 rounded-full" aria-label="Close history">
+                <X size={20}/>
+              </button>
             </div>
 
             {/* Modal Body (Chat) */}
@@ -929,6 +961,7 @@ export default function Dashboard() {
                 <button 
                   onClick={() => setShowBriefingModal(false)} 
                   className="p-2 rounded-full hover:bg-white/50 text-gray-500 transition"
+                  aria-label="Close briefing"
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -940,7 +973,7 @@ export default function Dashboard() {
               {generatingBriefing ? (
                 <div className="flex flex-col items-center justify-center py-16">
                   <RefreshCw className="w-12 h-12 text-blue-600 animate-spin mb-4" />
-                  <p className="text-gray-600 text-lg">Analyzing your messages...</p>
+                  <p className="text-gray-600 text-lg">Analyzing your messages…</p>
                   <p className="text-gray-400 text-sm mt-2">This may take a few seconds</p>
                 </div>
               ) : briefing ? (

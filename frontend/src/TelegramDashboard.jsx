@@ -304,6 +304,8 @@ export default function TelegramDashboard() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="Search threads"
+              name="searchTelegramThreads"
+              autoComplete="off"
               className="px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none w-40 md:w-64"
             />
             <button
@@ -383,7 +385,7 @@ export default function TelegramDashboard() {
                     className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium disabled:opacity-50"
                   >
                     <Sparkles className="w-4 h-4" />
-                    {generating === latestMsg.id + '-professional' ? 'Generating...' : 'Professional'}
+                    {generating === latestMsg.id + '-professional' ? 'Generating…' : 'Professional'}
                   </button>
                   <button
                     onClick={() => generateDraft(thread, 'personal')}
@@ -391,7 +393,7 @@ export default function TelegramDashboard() {
                     className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium disabled:opacity-50"
                   >
                     <Sparkles className="w-4 h-4" />
-                    {generating === latestMsg.id + '-personal' ? 'Generating...' : 'Personal'}
+                    {generating === latestMsg.id + '-personal' ? 'Generating…' : 'Personal'}
                   </button>
                   <button
                     onClick={() => markThreadAsRead(thread)}
@@ -414,6 +416,7 @@ export default function TelegramDashboard() {
                           delete next[latestMsg.id];
                           return next;
                         })}
+                        aria-label="Dismiss draft"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -424,6 +427,9 @@ export default function TelegramDashboard() {
                           value={editingDraft.text}
                           onChange={(e) => setEditingDraft({ ...editingDraft, text: e.target.value })}
                           className="w-full border rounded-lg p-2 text-sm"
+                          aria-label="Edit draft message"
+                          name="telegramDraftText"
+                          autoComplete="off"
                         />
                         <div className="flex gap-2">
                           <button
@@ -480,12 +486,13 @@ export default function TelegramDashboard() {
               <button
                 onClick={() => setShowBriefingModal(false)}
                 className="text-gray-400 hover:text-gray-600"
+                aria-label="Close briefing"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-4 text-sm whitespace-pre-wrap text-gray-800 min-h-[200px]">
-              {generatingBriefing ? 'Generating briefing...' : (briefing || 'No data')}
+              {generatingBriefing ? 'Generating briefing…' : (briefing || 'No data')}
             </div>
           </div>
         </div>
@@ -499,12 +506,13 @@ export default function TelegramDashboard() {
               <button
                 onClick={() => setHistoryModalOpen(false)}
                 className="text-gray-400 hover:text-gray-600"
+                aria-label="Close history"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-4 max-h-[60vh] overflow-y-auto text-sm space-y-3">
-              {loadingHistory && <div className="text-gray-500">Loading history...</div>}
+              {loadingHistory && <div className="text-gray-500">Loading history…</div>}
               {!loadingHistory && fullHistory.map(msg => (
                 <div key={msg.id} className={`p-3 rounded-lg ${msg.fromMe ? 'bg-blue-50' : 'bg-gray-100'}`}>
                   <div className="text-xs text-gray-500 mb-1">

@@ -69,6 +69,7 @@ export default function TasksPage() {
             <button
               onClick={() => navigate('/')}
               className="p-2 hover:bg-gray-100 rounded-full transition"
+              aria-label="Back to dashboard"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -79,6 +80,7 @@ export default function TasksPage() {
           <button
             onClick={fetchDetectedTasks}
             className="p-2 rounded-full hover:bg-gray-100"
+            aria-label="Refresh tasks"
           >
             <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -105,7 +107,7 @@ export default function TasksPage() {
           {loading && tasks.length === 0 ? (
             <div className="text-center py-16">
               <RefreshCw className="w-12 h-12 text-gray-400 animate-spin mx-auto mb-4" />
-              <p className="text-gray-500">Loading detected tasks...</p>
+              <p className="text-gray-500">Loading detected tasks…</p>
             </div>
           ) : tasks.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
