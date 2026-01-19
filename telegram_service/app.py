@@ -61,10 +61,13 @@ async def require_authorized(telegram: TelegramClient) -> None:
         raise HTTPException(status_code=401, detail="Telegram not authorized")
 
 
-async def safe_get_messages(telegram: TelegramClient, entity, limit: int):
+async def safe_get_messages(telegram: TelegramClient, entity, limit: int, timeout_s: float = 10.0):
     for attempt in range(3):
         try:
-            return await telegram.get_messages(entity, limit=limit)
+            return await asyncio.wait_for(
+                telegram.get_messages(entity, limit=limit),
+                timeout=timeout_s,
+            )
         except FloodWaitError as exc:
             raise HTTPException(
                 status_code=429,
@@ -75,6 +78,11 @@ async def safe_get_messages(telegram: TelegramClient, entity, limit: int):
                 await asyncio.sleep(0.5 * (attempt + 1))
                 continue
             raise
+        except asyncio.TimeoutError as exc:
+            if attempt < 2:
+                await asyncio.sleep(0.5 * (attempt + 1))
+                continue
+            raise HTTPException(status_code=504, detail="Telegram request timed out") from exc
 
 
 def normalize_message(dialog, message):
@@ -207,6 +215,8 @@ async def list_unread(limit: int = 50, dialog_limit: int = 50, messages_per_chat
     dialogs = await telegram.get_dialogs(limit=dialog_limit)
     results = []
     for dialog in dialogs:
+        if getattr(dialog, "unread_count", 0) == 0:
+            continue
         try:
             messages = await safe_get_messages(telegram, dialog.entity, limit=messages_per_chat)
         except HTTPException:
